@@ -1,0 +1,92 @@
+[
+  {
+    "name": "ui-tap",
+    "seconds": 1,
+    "prompt": "A short soft UI click, a gentle fingertip tap on a plastic button, clean and quiet.",
+    "event": "ui"
+  },
+  {
+    "name": "pencil-touch",
+    "seconds": 1,
+    "prompt": "A pencil tip touching down on paper, one brief light scratch with a soft graphite tick.",
+    "event": "draw-start"
+  },
+  {
+    "name": "ink-stroke",
+    "seconds": 1,
+    "prompt": "A pencil drawing a single confident line across rough paper, continuous dry graphite scratching.",
+    "event": "stroke"
+  },
+  {
+    "name": "invalid-buzz",
+    "seconds": 1,
+    "prompt": "A low dull error thud, two muted knocks on a wooden desk signaling something not allowed.",
+    "event": "invalid"
+  },
+  {
+    "name": "storm-release",
+    "seconds": 2,
+    "prompt": "A heavy page flip whoosh followed by a low rolling storm rumble fading out.",
+    "event": "release"
+  },
+  {
+    "name": "creature-spawn",
+    "seconds": 1,
+    "prompt": "A small soft airy pop with a faint chirp, like a tiny creature appearing on paper.",
+    "event": "spawn"
+  },
+  {
+    "name": "shield-block",
+    "seconds": 1,
+    "prompt": "A firm wooden knock with a short solid thud, like a small shield stopping a blow.",
+    "event": "block"
+  },
+  {
+    "name": "pebble-bounce",
+    "seconds": 1,
+    "prompt": "A small pebble bouncing once on a hard surface, a light quick tap with a soft decay.",
+    "event": "bounce"
+  },
+  {
+    "name": "creature-hit",
+    "seconds": 1,
+    "prompt": "A heavy impact thud with a brief crunch, a solid hit landing on a small creature.",
+    "event": "hit"
+  },
+  {
+    "name": "victory-chime",
+    "seconds": 2,
+    "prompt": "A bright ascending chime arpeggio, four gentle bell notes rising happily, resolving warmly.",
+    "event": "win"
+  },
+  {
+    "name": "defeat-tone",
+    "seconds": 2,
+    "prompt": "A low somber tone slowly descending, two soft sad notes fading into silence.",
+    "event": "lose"
+  },
+  {
+    "name": "undo-swipe",
+    "seconds": 1,
+    "prompt": "A quick paper slide swipe, a sheet being pulled back across a desk.",
+    "event": "undo"
+  },
+  {
+    "name": "hint-glimmer",
+    "seconds": 1,
+    "prompt": "A soft sparkling glimmer, two gentle high shimmer notes suggesting a subtle clue.",
+    "event": "hint"
+  },
+  {
+    "name": "star-twinkle",
+    "seconds": 1,
+    "prompt": "A high delicate twinkle, a tiny bright bell ping shimmering briefly.",
+    "event": "star"
+  },
+  {
+    "name": "turn-skip",
+    "seconds": 1,
+    "prompt": "A quick airy whoosh, a fast light pass-by like a page being skipped.",
+    "event": "skip"
+  }
+]

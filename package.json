@@ -1,0 +1,12 @@
+{
+  "name": "guardian-sketch",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "start": "node server.js",
+    "test": "node tests/run.js"
+  },
+  "dependencies": {
+    "three": "^0.170.0"
+  }
+}
