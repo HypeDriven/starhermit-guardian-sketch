@@ -65,6 +65,7 @@ canvas.gs-gl { display: block; width: 100%; height: 100%; touch-action: none; }
 .gs-btn:disabled { opacity: 0.45; cursor: default; transform: none; }
 .gs-btn.primary { background: var(--gs-accent); font-weight: 600; }
 .gs-btn.primary.big { font-size: clamp(18px, 3vh, 28px); padding: 0.9em 2em; grid-column: 1 / -1; }
+.gs-btn.primary.big::before { content: '▶ '; } /* decorative; not part of the accessible label */
 .gs-btn.danger { background: var(--gs-danger); color: #fff; }
 .gs-btn.ghost-btn { background: rgba(238, 241, 246, 0.15); color: var(--gs-fg); }
 body.high-contrast .gs-btn { border: 2px solid currentColor; }
@@ -294,6 +295,9 @@ body.left-handed .gs-mirror { right: auto; left: calc(var(--gs-sal) + 10px); }
   .gs-ink { width: 130px; }
   .gs-bar { flex-wrap: wrap; justify-content: center; max-width: 96vw; }
   .gs-bar .gs-btn { padding: 0.7em 1em; }
+  /* 40 journey stages must fit the sheet panel without pushing Back off-screen */
+  .gs-journey-grid { grid-template-columns: repeat(auto-fill, minmax(52px, 1fr)); gap: 6px; }
+  .gs-level { min-height: 52px; }
 }
 /* Landscape mobile: keep the tray narrow on the side when very short. */
 @media (max-height: 480px) and (orientation: landscape) {

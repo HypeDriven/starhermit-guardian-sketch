@@ -40,16 +40,27 @@ function transition(to, reason) {
 
 // ---------- telemetry (anonymous funnel only) ----------
 const sessionId = 's-' + Math.random().toString(36).slice(2, 10);
+// Fire-and-forget delivery: fire-and-forget fetch() POSTs with a non-simple
+// Content-Type get cancelled by the browser (net::ERR_ABORTED), so prefer
+// sendBeacon; the fetch fallback uses a simple content type on purpose.
+// The server only counts these events and never parses the body.
+function sendTelemetry(payload) {
+  const body = JSON.stringify(payload);
+  try {
+    if (navigator.sendBeacon && navigator.sendBeacon('/api/v1/telemetry', body)) return;
+  } catch (e) { /* fall through to fetch */ }
+  fetch('/api/v1/telemetry', {
+    method: 'POST', headers: { 'Content-Type': 'text/plain' },
+    body: body, keepalive: true
+  }).catch(function () {});
+}
 function telemetry(event) {
   try {
     const q = JSON.parse(localStorage.getItem(TELEMETRY_KEY) || '[]');
     q.push({ event: event, sessionId: sessionId, at: Date.now() });
     while (q.length > 60) q.shift();
     localStorage.setItem(TELEMETRY_KEY, JSON.stringify(q));
-    fetch('/api/v1/telemetry', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ event: event, sessionId: sessionId })
-    }).catch(function () {});
+    sendTelemetry({ event: event, sessionId: sessionId });
   } catch (e) { /* offline / private mode: no-op */ }
 }
 

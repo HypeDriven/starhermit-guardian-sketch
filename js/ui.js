@@ -135,7 +135,7 @@ export function createUI(root, handlers) {
     card.appendChild(dailyCountdownEl);
 
     const grid = el('div', 'gs-title-grid');
-    const play = btn('▶ Play', 'primary big', function () { clickSfx(); H('onPlay'); });
+    const play = btn('Play', 'primary big', function () { clickSfx(); H('onPlay'); });
     grid.appendChild(play);
     [['Journey', 'onOpenJourney'], ['Daily', 'onOpenDaily'], ['Practice', 'onOpenPractice'],
      ['Challenges', 'onOpenChallenges'], ['Tempest Stand', 'onOpenStorm'], ['Learn', 'onOpenLearn'],
