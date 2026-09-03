@@ -39,28 +39,15 @@ function transition(to, reason) {
 }
 
 // ---------- telemetry (anonymous funnel only) ----------
+// The host guarantees only GET /api/v1/time; every other /api/v1/* route may
+// not exist once deployed, so telemetry stays local and never issues a request.
 const sessionId = 's-' + Math.random().toString(36).slice(2, 10);
-// Fire-and-forget delivery: fire-and-forget fetch() POSTs with a non-simple
-// Content-Type get cancelled by the browser (net::ERR_ABORTED), so prefer
-// sendBeacon; the fetch fallback uses a simple content type on purpose.
-// The server only counts these events and never parses the body.
-function sendTelemetry(payload) {
-  const body = JSON.stringify(payload);
-  try {
-    if (navigator.sendBeacon && navigator.sendBeacon('/api/v1/telemetry', body)) return;
-  } catch (e) { /* fall through to fetch */ }
-  fetch('/api/v1/telemetry', {
-    method: 'POST', headers: { 'Content-Type': 'text/plain' },
-    body: body, keepalive: true
-  }).catch(function () {});
-}
 function telemetry(event) {
   try {
     const q = JSON.parse(localStorage.getItem(TELEMETRY_KEY) || '[]');
     q.push({ event: event, sessionId: sessionId, at: Date.now() });
     while (q.length > 60) q.shift();
     localStorage.setItem(TELEMETRY_KEY, JSON.stringify(q));
-    sendTelemetry({ event: event, sessionId: sessionId });
   } catch (e) { /* offline / private mode: no-op */ }
 }
 
@@ -90,6 +77,9 @@ canvasWrap.className = 'gs-canvas-wrap';
 rootEl.appendChild(canvasWrap);
 
 // ---------- server time ----------
+// /api/v1/time is the one host route guaranteed to exist; probe it once at
+// startup. Everything else under /api/v1/* is not guaranteed, so no other
+// route is ever requested — hosted features degrade to local behaviour.
 let serverOffset = null; // serverNow - localNow
 let serverNowMs = function () { return serverOffset != null ? Date.now() + serverOffset : Date.now(); };
 
@@ -505,39 +495,12 @@ async function submitScore(envelope, done) {
   const score = session.state.score.total;
   const won = !!(session.state.terminal && session.state.terminal.won);
   storeLocalEntry(board, score, won);
+  // /api/v1/score is not guaranteed to exist on the host, so scores are
+  // kept on-device only; no request is ever issued.
   const local = GSStore.sortEntries(localEntries(board)).map(function (e) {
     return Object.assign({}, e, { self: e.sessionId === sessionId });
   });
-  async function attempt() {
-    const r = await fetch('/api/v1/score', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ board: board, name: playerName(), envelope: envelope })
-    });
-    if (r.status === 429) throw { retry: true };
-    const j = await r.json();
-    if (j && j.error) throw { msg: j.error };
-    return j;
-  }
-  try {
-    let j;
-    try { j = await attempt(); }
-    catch (e) {
-      if (e && e.retry) { await new Promise(function (rs) { setTimeout(rs, 1200); }); j = await attempt(); }
-      else throw e;
-    }
-    if (j && j.ok) {
-      const remote = (j.top || []).map(function (e) { return Object.assign({}, e); });
-      const merged = GSStore.sortEntries(remote.concat(localEntries(board))).map(function (e) {
-        return Object.assign({}, e, { self: e.sessionId === sessionId });
-      });
-      done(merged.slice(0, 10), null);
-      return;
-    }
-    throw { msg: 'unexpected response' };
-  } catch (e) {
-    if (e && e.msg) ui.toast('Score service: ' + e.msg);
-    done(local.slice(0, 10), 'casual (unvalidated)');
-  }
+  done(local.slice(0, 10), 'casual (unvalidated)');
 }
 
 // ---------- input: pointer drawing ----------
@@ -732,27 +695,12 @@ document.addEventListener('visibilitychange', function () {
 window.addEventListener('resize', function () { if (renderer) renderer.resize(); updatePenMarker(); });
 
 // ---------- presence / activity ----------
-function startPresence() {
-  stopPresence();
-  presenceTimer = setInterval(function () {
-    if (appState === 'active') {
-      fetch('/api/v1/presence', { method: 'POST' }).catch(function () {});
-    }
-  }, 30000);
-}
+// Presence and activity routes are not guaranteed on the host; these are
+// local no-ops that never issue a request.
+function startPresence() { stopPresence(); }
 function stopPresence() { if (presenceTimer) { clearInterval(presenceTimer); presenceTimer = null; } }
 
-let activitySent = false;
-function sendActivityStart() {
-  if (activitySent || !navigator.sendBeacon) return;
-  activitySent = true;
-  try { navigator.sendBeacon('/api/v1/activity', JSON.stringify({ event: 'start' })); } catch (e) {}
-}
-window.addEventListener('pagehide', function () {
-  if (navigator.sendBeacon) {
-    try { navigator.sendBeacon('/api/v1/activity', JSON.stringify({ event: 'end' })); } catch (e) {}
-  }
-});
+function sendActivityStart() {}
 
 // ---------- HUD / mirror ----------
 function updateHUD() {
@@ -887,12 +835,9 @@ async function openDaily() {
   const date = todayStr();
   let cfg = dailyCfgCache;
   if (!cfg || cfg.date !== date) {
-    try {
-      const r = await fetch('/api/v1/daily');
-      const j = r.ok ? await r.json() : null;
-      if (j && j.config && j.date === date) cfg = j.config;
-    } catch (e) {}
-    if (!cfg) cfg = GSContent.dailyConfig(date); // offline fallback
+    // /api/v1/daily is not guaranteed on the host; the daily config is
+    // deterministic, so resolve it locally instead of requesting it.
+    cfg = GSContent.dailyConfig(date);
     dailyCfgCache = cfg;
   }
   const done = progress.dailiesDone[date];
@@ -1009,13 +954,9 @@ function openScores() {
   if (scoresTab === 'device') {
     render(GSStore.sortEntries(localEntries(scoresBoard)), 'No local entries for this board yet.');
   } else {
-    fetch('/api/v1/leaderboard?board=' + encodeURIComponent(scoresBoard))
-      .then(function (r) { return r.ok ? r.json() : null; })
-      .then(function (j) {
-        if (j && j.entries) render(j.entries);
-        else render(null, 'Global scores unavailable (offline).');
-      })
-      .catch(function () { render(null, 'Global scores unavailable (offline).'); });
+    // /api/v1/leaderboard is not guaranteed on the host; show the local
+    // board instead of requesting a route that may not exist.
+    render(GSStore.sortEntries(localEntries(scoresBoard)), 'No scores on this device for this board yet.');
   }
 }
 
