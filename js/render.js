@@ -172,6 +172,7 @@ export function createRenderer(container, opts) {
 
   // Trace playback state.
   let playback = null; // {trace, events, evIdx, startMs, speed, onEvent, onDone, done}
+  let playbackPausedAt = null; // wall-clock ms when playback was paused
 
   // ---------- helpers ----------
 
@@ -451,6 +452,7 @@ export function createRenderer(container, opts) {
       done: false,
       spawnById: {}
     };
+    playbackPausedAt = null;
     (trace.spawns || []).forEach(function (sp) { playback.spawnById[sp.id] = sp; });
   }
 
@@ -524,7 +526,23 @@ export function createRenderer(container, opts) {
 
   function stopTrace() {
     if (playback) { playback.done = true; playback = null; }
+    playbackPausedAt = null;
     Array.from(activeHazards.keys()).forEach(freeHazardMesh);
+  }
+
+  // Pause/resume cosmetic playback (pause menu, backgrounded tab). While
+  // paused the loop skips playback advance; on resume startMs is shifted so
+  // the trace continues from the exact tick it froze at.
+  function pauseTrace() {
+    if (playback && !playback.done && playbackPausedAt == null) {
+      playbackPausedAt = performance.now();
+    }
+  }
+  function resumeTrace() {
+    if (playback && playbackPausedAt != null) {
+      playback.startMs += performance.now() - playbackPausedAt;
+    }
+    playbackPausedAt = null;
   }
 
   // ---------- fx helpers ----------
@@ -660,7 +678,7 @@ export function createRenderer(container, opts) {
     }
 
     // trace playback
-    if (playback && !playback.done) {
+    if (playback && !playback.done && playbackPausedAt == null) {
       const tick = currentTick(playback);
       const fi = Math.floor(tick / playback.trace.sample);
       const alpha = (tick / playback.trace.sample) - fi;
@@ -730,6 +748,8 @@ export function createRenderer(container, opts) {
     playTrace: playTrace,
     skipTrace: skip,
     stopTrace: stopTrace,
+    pauseTrace: pauseTrace,
+    resumeTrace: resumeTrace,
     isPlaying: function () { return !!playback; },
     traceProgress: function () {
       if (!playback) return 1;

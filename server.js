@@ -256,7 +256,7 @@ function serveStatic(req, res, url) {
   let p = url.pathname;
   if (p === '/' || p.endsWith('/')) p = '/index.html';
   const file = path.normalize(path.join(ROOT, p.replace(/^\/+/, '')));
-  if (!file.startsWith(ROOT) || file.includes(`${path.sep}data${path.sep}`)) {
+  if ((file !== ROOT && !file.startsWith(ROOT + path.sep)) || file.includes(`${path.sep}data${path.sep}`)) {
     sendError(res, 403, 'forbidden');
     return;
   }

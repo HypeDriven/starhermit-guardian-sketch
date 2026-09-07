@@ -19,7 +19,7 @@ const BINDINGS = {
   'U': 'Undo last stroke',
   'H': 'Hint',
   'S': 'Skip storm playback',
-  'P or Escape': 'Pause',
+  'P or Escape': 'Pause / resume',
   'Enter': 'Confirm default button',
   'C': 'Reset camera framing',
   'Gamepad dpad/stick': 'Move the pen',
@@ -158,6 +158,9 @@ function beginLevel(cfg, opts) {
   };
   pendingStroke = null;
   releaseArmed = false;
+  lastCommitKey = null; // the guard is per-round; identical strokes in a new round must commit
+  pen.down = false;
+  pen.pts = null;
   lastSpawnSfx = lastBounceSfx = 0;
   if (renderer) {
     renderer.setLevel(session.cfg);
@@ -238,7 +241,7 @@ function commitStroke(points) {
 function undoStroke() {
   if (!session || !session.cfg.mechanics.undo || session.state.phase !== 'draw' || session.state.terminal) return;
   const strokes = session.commands.filter(function (c) { return c.type === 'stroke'; });
-  if (!strokes.length) { onInvalid('stroke-limit'); return; }
+  if (!strokes.length) { ui.toast('Nothing to undo'); return; } // not a rejected command: no invalid mark
   // replay commands minus the last stroke
   const kept = session.commands.slice();
   for (let i = kept.length - 1; i >= 0; i--) {
@@ -329,6 +332,9 @@ function onResolved(won) {
   if (won) { sfx('win'); if (renderer) renderer.celebrate(); }
   else sfx('lose');
   if (session.mode === 'tutorial') lessonEvent(won ? 'win' : 'lose');
+  // Capture the previous personal best before finalizeProgress overwrites it,
+  // so the results screen can distinguish "new best" from "tied the best".
+  session.prevBest = personalBest();
   finalizeProgress(won);
   const envelope = session.ranked ? buildEnvelope() : null;
   if (session.ranked && envelope) {
@@ -339,6 +345,15 @@ function onResolved(won) {
   } else {
     showResults(won, null, null);
   }
+}
+
+function personalBest() {
+  if (!session) return null;
+  if (session.mode === 'journey') return progress.journeyBest[session.cfg.id] != null ? progress.journeyBest[session.cfg.id] : null;
+  if (session.mode === 'daily') return progress.dailiesDone[session.cfg.date] != null ? progress.dailiesDone[session.cfg.date] : null;
+  if (session.mode === 'challenge') return progress.challengeBest[session.cfg.id] != null ? progress.challengeBest[session.cfg.id] : null;
+  if (session.mode === 'storm') return progress.stormBest > 0 ? progress.stormBest : null;
+  return null;
 }
 
 // ---------- progression / achievements ----------
@@ -411,7 +426,9 @@ function showResults(won, entries, boardLabel) {
   else if (session.mode === 'daily') best = progress.dailiesDone[session.cfg.date];
   else if (session.mode === 'challenge') best = progress.challengeBest[session.cfg.id];
   else if (session.mode === 'storm') best = progress.stormBest;
-  if (best != null) isNewBest = best === st.score.total && st.score.total > 0;
+  if (best != null && st.score.total > 0) {
+    isNewBest = session.prevBest == null || st.score.total > session.prevBest;
+  }
 
   const isJourney = session.mode === 'journey';
   const nextIdx = isJourney ? session.cfg.index + 1 : -1;
@@ -509,12 +526,16 @@ function bindPointer(canvas) {
   let downPos = null, downTime = 0;
   let pts = null;
   let overInk = false;
+  let capWarned = false;
 
   function pushPoint(w) {
     const last = pts[pts.length - 1];
     const dx = w.x - last[0], dy = w.y - last[1];
     if (dx * dx + dy * dy < 4) return; // dedupe ≥2 world units
-    if (pts.length >= GSRules.MAX_POINTS) { onInvalid('too-many-points'); return; }
+    if (pts.length >= GSRules.MAX_POINTS) {
+      if (!capWarned) { capWarned = true; onInvalid('too-many-points'); } // warn once per stroke, not per move event
+      return;
+    }
     if (!overInk) {
       const used = GSRules.polyLength(pts.concat([[w.x, w.y]]));
       if (used > inkLeft()) { overInk = true; onInvalid('ink-exhausted'); return; }
@@ -534,6 +555,7 @@ function bindPointer(canvas) {
     downTime = performance.now();
     pts = [[Math.round(w.x), Math.round(w.y)]];
     overInk = false;
+    capWarned = false;
     try { canvas.setPointerCapture(ev.pointerId); } catch (e) { /* synthetic pointers */ }
     sfx('draw-start');
   });
@@ -597,8 +619,9 @@ function penMove(dx, dy) {
     if (Math.hypot(pen.x - last[0], pen.y - last[1]) >= 2 && pen.pts.length < GSRules.MAX_POINTS) {
       if (GSRules.polyLength(pen.pts.concat([[pen.x, pen.y]])) <= inkLeft()) {
         pen.pts.push([Math.round(pen.x), Math.round(pen.y)]);
+        pen.inkWarned = false;
         if (renderer) renderer.showGhost(pen.pts);
-      } else onInvalid('ink-exhausted');
+      } else if (!pen.inkWarned) { pen.inkWarned = true; onInvalid('ink-exhausted'); } // warn once per stroke
     }
   }
   updatePenMarker();
@@ -607,7 +630,7 @@ function penToggle() {
   if (!session || session.state.phase !== 'draw') return;
   pen.active = true;
   pen.down = !pen.down;
-  if (pen.down) { pen.pts = [[Math.round(pen.x), Math.round(pen.y)]]; sfx('draw-start'); }
+  if (pen.down) { pen.pts = [[Math.round(pen.x), Math.round(pen.y)]]; pen.inkWarned = false; sfx('draw-start'); }
   else {
     const drawn = pen.pts;
     pen.pts = null;
@@ -623,17 +646,23 @@ window.addEventListener('keydown', function (ev) {
   if (ev.target && (ev.target.tagName === 'INPUT' || ev.target.tagName === 'SELECT' || ev.target.tagName === 'TEXTAREA')) return;
   keysDown[ev.key] = true;
   const k = ev.key;
-  if (k === ' ') { ev.preventDefault(); if (!ev.repeat) penToggle(); return; }
+  if (k === ' ') { ev.preventDefault(); if (!ev.repeat && appState === 'active' && !ui.isModalOpen()) penToggle(); return; }
   if (k === 'Enter') return; // native button activation
+  // Pause/resume must work while the (non-dismissable) pause panel is open:
+  // handle it before the generic modal gate. The UI's own Escape handler
+  // closes dismissable modals and stops propagation, so this only sees
+  // Escape when the pause panel (or nothing) is on top.
+  if (k === 'p' || k === 'P' || k === 'Escape') {
+    if ((appState === 'active' || appState === 'resolving') && !ui.isModalOpen()) pauseGame('key');
+    else if (appState === 'paused' && ui.isPauseOpen()) resumeGame();
+    return;
+  }
   if (ui.isModalOpen()) return;
   if (k === 'r' || k === 'R') { if (appState === 'active') doRelease(); }
   else if (k === 'u' || k === 'U') { if (appState === 'active') undoStroke(); }
   else if (k === 'h' || k === 'H') { if (appState === 'active') showHintNow(); }
   else if (k === 's' || k === 'S') { if (appState === 'resolving') skipPlayback(); }
-  else if (k === 'p' || k === 'P' || k === 'Escape') {
-    if (appState === 'active') pauseGame('key');
-    else if (appState === 'paused') resumeGame();
-  } else if (k === 'c' || k === 'C') { if (renderer) renderer.resize(); }
+  else if (k === 'c' || k === 'C') { if (renderer) renderer.resize(); }
 });
 window.addEventListener('keyup', function (ev) { keysDown[ev.key] = false; });
 
@@ -673,20 +702,32 @@ function inputTick() {
 // ---------- pause / resume / visibility ----------
 function pauseGame(reason) {
   if (appState !== 'active' && appState !== 'resolving') return;
+  if (ui.isModalOpen()) return; // never transition without a visible pause panel
   transition('paused', reason);
+  if (renderer) renderer.pauseTrace(); // freeze storm playback at its exact tick
   ui.showPause();
   updateMirror('paused');
 }
 function resumeGame() {
   if (appState !== 'paused') return;
   ui.closeModal();
-  transition(session && session.state.phase === 'done' ? 'resolving' : 'active', 'resume');
+  const resolving = session && session.state.phase === 'done';
+  transition(resolving ? 'resolving' : 'active', 'resume');
+  if (resolving && renderer) {
+    if (renderer.isPlaying()) {
+      renderer.resumeTrace();
+    } else {
+      // Playback settled while paused (e.g. long backgrounding): resolve now
+      // instead of idling in 'resolving' with no pending onDone callback.
+      onResolved(!!(session.state.terminal && session.state.terminal.won));
+    }
+  }
 }
 document.addEventListener('visibilitychange', function () {
   if (document.hidden) {
     if (renderer) renderer.setVisible(false);
     GSAudio.suspend();
-    if (appState === 'active') pauseGame('backgrounded');
+    if (appState === 'active' || appState === 'resolving') pauseGame('backgrounded');
   } else {
     if (renderer) renderer.setVisible(true);
     GSAudio.resume();

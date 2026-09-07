@@ -323,8 +323,12 @@ export function createUI(root, handlers) {
     col.appendChild(btn('Restart', null, function () { clickSfx(); closeModal(); H('onRestart'); }));
     col.appendChild(btn('Quit to title', null, function () { clickSfx(); closeModal(); H('onQuitToTitle'); }));
     p.appendChild(col);
-    openModal(p, { dismissable: false });
+    const rec = openModal(p, { dismissable: false });
+    rec.isPause = true;
     announce('Paused');
+  }
+  function isPauseOpen() {
+    return modalStack.length > 0 && !!modalStack[modalStack.length - 1].isPause;
   }
 
   // ---------- settings ----------
@@ -623,6 +627,7 @@ export function createUI(root, handlers) {
     closeModal: closeModal,
     closeAllModals: closeAllModals,
     isModalOpen: isModalOpen,
+    isPauseOpen: isPauseOpen,
     hideAll: hideAll
   };
 }

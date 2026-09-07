@@ -4,9 +4,13 @@
   "private": true,
   "scripts": {
     "start": "node server.js",
-    "test": "node tests/run.js"
+    "test": "node tests/run.js",
+    "test:e2e": "node tests/e2e.mjs"
   },
   "dependencies": {
     "three": "^0.170.0"
+  },
+  "devDependencies": {
+    "playwright-core": "^1.62.1"
   }
 }
