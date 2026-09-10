@@ -1,0 +1,25 @@
+# Guardian Sketch — canonical SFX manifest
+# file | event id | description of the sound | usage context
+# Event ids are the keys GSAudio.play() receives (js/audio.js SFX map); js/main.js emits them.
+# manifest.json holds the MOSS-SFX generator entries (name, seconds, prompt, event) for the same clips.
+ui-tap.opus | ui | A short soft UI click, a gentle fingertip tap on a plastic button, clean and quiet. | Every menu button press and Undo/Hint/Skip/Pause tray taps (ui.js clickSfx → onUiSound).
+pencil-touch.opus | draw-start | A pencil tip touching down on paper, one brief light scratch with a soft graphite tick. | Pointer down on the page or Space pen-down on the keyboard pen (main.js bindPointer / penToggle).
+ink-stroke.opus | stroke | A pencil drawing a single confident line across rough paper, continuous dry graphite scratching. | A stroke command is accepted and becomes a barrier (main.js commitStroke).
+invalid-buzz.opus | invalid | A low dull error thud, two muted knocks on a wooden desk signaling something not allowed. | Any rejected command or over-budget drag: ink-exhausted, too-many-points, stroke-too-short, out-of-bounds (main.js onInvalid).
+storm-release.opus | release | A heavy page flip whoosh followed by a low rolling storm rumble fading out. | Release accepted; storm playback begins (main.js doRelease).
+creature-spawn.opus | spawn | A small soft airy pop with a faint chirp, like a tiny creature appearing on paper. | A hazard leaves its emitter during playback, throttled to one per 90 ms (main.js onTraceEvent).
+shield-block.opus | block | A firm wooden knock with a short solid thud, like a small shield stopping a blow. | An ink drop first touches an ink barrier during playback; generic block layer for any hazard whose material clip is missing (main.js onTraceEvent).
+ember-sizzle.opus | block-ember | A hot ember landing on wet ink, a short sharp sizzle hiss with a tiny crackle, fading fast. | An ember first touches an ink barrier during playback (main.js onTraceEvent, hazard type ember).
+gale-deflect.opus | block-gale | A gust of wind striking a thin wall and rushing off sideways, a quick airy whoosh deflected with a soft flutter. | A gale wisp first touches an ink barrier during playback (main.js onTraceEvent, hazard type gale).
+pebble-clack.opus | block-pebble | A small stone striking a hard wooden edge, one crisp dry clack with a short hollow ring. | A pebble first touches an ink barrier during playback (main.js onTraceEvent, hazard type pebble).
+pebble-bounce.opus | bounce | A small pebble bouncing once on a hard surface, a light quick tap with a soft decay. | A hazard bounces off a sketched ledge (non-barrier obstacle), throttled to one per 140 ms (main.js onTraceEvent).
+creature-hit.opus | hit | A heavy impact thud with a brief crunch, a solid hit landing on a small creature. | A hazard touches a wisp; the round is lost (main.js onTraceEvent, with haptic pulse).
+victory-chime.opus | win | A bright ascending chime arpeggio, four gentle bell notes rising happily, resolving warmly. | Playback settles with every wisp untouched; results open on "Saved!" (main.js onResolved).
+defeat-tone.opus | lose | A low somber tone slowly descending, two soft sad notes fading into silence. | Playback settles after a hit, or the round was resigned (main.js onResolved).
+undo-swipe.opus | undo | A quick paper slide swipe, a sheet being pulled back across a desk. | Last stroke removed by Undo / U in modes that allow it (main.js undoStroke).
+hint-glimmer.opus | hint | A soft sparkling glimmer, two gentle high shimmer notes suggesting a subtle clue. | A dashed hint shield appears on the page after Hint / H (main.js showHintNow).
+star-twinkle.opus | star | A high delicate twinkle, a tiny bright bell ping shimmering briefly. | Each newly earned journey star at results, one ping per star (main.js finalizeProgress).
+badge-unlock.opus | achievement | A warm achievement flourish, a soft brass-and-bell chord swelling briefly then a gentle sparkling tail. | An achievement key is unlocked for the first time (main.js unlock).
+lesson-flourish.opus | lesson | A short cheerful completion jingle, three quick rising xylophone notes ending on a bright resolved ding. | A Learn lesson goal is met and the "Lesson complete!" toast shows (main.js lessonEvent).
+turn-skip.opus | skip | A quick airy whoosh, a fast light pass-by like a page being skipped. | Skip / S fast-forwards storm playback to its settled end state (main.js skipPlayback).
+pause-hush.opus | pause | A soft muffled hush, like a hand gently laid over an open book, a low airy thump with a quick damped decay. | The pause panel opens via button, P/Escape, gamepad Start, or tab backgrounding (main.js pauseGame).

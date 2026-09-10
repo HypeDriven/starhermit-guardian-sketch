@@ -27,6 +27,7 @@ const MIME = {
   '.svg': 'image/svg+xml',
   '.txt': 'text/plain; charset=utf-8',
   '.ico': 'image/x-icon',
+  '.webp': 'image/webp',
   '.opus': 'audio/ogg'
 };
 
@@ -251,7 +252,7 @@ function compareEntries(a, b) {
 }
 
 // ---------- static ----------
-const STATIC_ALLOW = new Set(['.html', '.js', '.mjs', '.css', '.json', '.png', '.svg', '.txt', '.ico', '.opus']);
+const STATIC_ALLOW = new Set(['.html', '.js', '.mjs', '.css', '.json', '.png', '.svg', '.txt', '.ico', '.opus', '.webp']);
 function serveStatic(req, res, url) {
   let p = url.pathname;
   if (p === '/' || p.endsWith('/')) p = '/index.html';

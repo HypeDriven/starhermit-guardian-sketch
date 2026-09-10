@@ -17,6 +17,17 @@ function btn(label, cls, onClick) {
   return b;
 }
 function hexCss(hex) { return '#' + ('000000' + hex.toString(16)).slice(-6); }
+// Decorative illustration that removes itself if the asset fails to load,
+// so layouts never show a broken-image box.
+function art(src, cls) {
+  const img = el('img', cls);
+  img.src = src;
+  img.alt = '';
+  img.decoding = 'async';
+  img.setAttribute('aria-hidden', 'true');
+  img.addEventListener('error', function () { img.remove(); });
+  return img;
+}
 
 const INVALID_TEXT = {
   'ink-exhausted': 'Not enough ink',
@@ -123,6 +134,7 @@ export function createUI(root, handlers) {
     hideAll();
     titleNode = el('div', 'gs-title');
     const card = el('div', 'gs-title-card');
+    card.appendChild(art('./assets/key-art.webp', 'gs-title-art'));
     card.appendChild(el('h1', 'gs-logo', 'Guardian Sketch'));
     card.appendChild(el('p', 'gs-tagline', 'Draw ink. Shield the wisps. Weather the storm.'));
 
@@ -433,6 +445,7 @@ export function createUI(root, handlers) {
     hideHUD();
     const p = panel(d.headline);
     p.setAttribute('aria-live', 'polite');
+    p.appendChild(art(d.won ? './assets/results-saved.webp' : './assets/results-hit.webp', 'gs-result-art'));
 
     const starsEl = el('div', 'gs-big-stars', starString(d.stars));
     p.appendChild(starsEl);

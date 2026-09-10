@@ -69,6 +69,7 @@ canvas.gs-gl { display: block; width: 100%; height: 100%; touch-action: none; }
 .gs-btn.danger { background: var(--gs-danger); color: #fff; }
 .gs-btn.ghost-btn { background: rgba(238, 241, 246, 0.15); color: var(--gs-fg); }
 body.high-contrast .gs-btn { border: 2px solid currentColor; }
+body.high-contrast .gs-panel, body.high-contrast .gs-learn-card { background-image: none; }
 
 :focus-visible { outline: 3px solid var(--gs-focus); outline-offset: 2px; border-radius: 4px; }
 
@@ -91,6 +92,11 @@ body.high-contrast .gs-btn { border: 2px solid currentColor; }
   overflow: auto;
 }
 .gs-title-card { text-align: center; max-width: min(92vw, 560px); }
+.gs-title-art {
+  display: block; width: min(92vw, 560px); max-height: 34vh; object-fit: cover;
+  margin: 0 auto 0.5em; border-radius: var(--gs-radius);
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.55);
+}
 .gs-logo {
   font-size: clamp(34px, 8vh, 72px); letter-spacing: 0.02em;
   color: var(--gs-fg); text-shadow: 0 2px 24px rgba(0, 0, 0, 0.6);
@@ -113,7 +119,7 @@ body.high-contrast .gs-btn { border: 2px solid currentColor; }
 }
 .gs-panel {
   width: min(92vw, 560px); max-height: 88vh; max-height: 88dvh; overflow: auto;
-  background: var(--gs-paper); color: var(--gs-paper-fg);
+  background: var(--gs-paper) url(../assets/paper-grain.webp) center / 256px repeat; color: var(--gs-paper-fg);
   border: 3px solid var(--gs-paper-edge);
   border-radius: var(--gs-radius);
   padding: clamp(0.9em, 2vh, 1.4em) clamp(1em, 2.4vw, 1.7em);
@@ -214,7 +220,7 @@ body.left-handed .gs-bar { flex-direction: row-reverse; }
 }
 .gs-learn-card {
   pointer-events: auto;
-  background: var(--gs-paper); color: var(--gs-paper-fg);
+  background: var(--gs-paper) url(../assets/paper-grain.webp) center / 256px repeat; color: var(--gs-paper-fg);
   border: 3px solid var(--gs-paper-edge); border-radius: var(--gs-radius);
   padding: 0.8em 1.1em; box-shadow: 0 10px 34px rgba(0, 0, 0, 0.5);
 }
@@ -222,6 +228,10 @@ body.left-handed .gs-bar { flex-direction: row-reverse; }
 .gs-learn-progress { font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.08em; opacity: 0.65; }
 
 /* ---------- results ---------- */
+.gs-result-art {
+  display: block; width: 100%; max-height: 22vh; object-fit: cover;
+  border-radius: 0.6em; margin: 0.2em 0 0.5em; border: 1px solid var(--gs-paper-edge);
+}
 .gs-big-stars { font-size: clamp(30px, 6vh, 54px); color: var(--gs-star); text-align: center; letter-spacing: 0.08em; }
 .gs-scoretable { margin-top: 0.7em; }
 .gs-scoretable .row { display: flex; justify-content: space-between; padding: 0.15em 0; font-variant-numeric: tabular-nums; }
@@ -301,6 +311,8 @@ body.left-handed .gs-mirror { right: auto; left: calc(var(--gs-sal) + 10px); }
 }
 /* Landscape mobile: keep the tray narrow on the side when very short. */
 @media (max-height: 480px) and (orientation: landscape) {
+  .gs-title-art { max-height: 22vh; }
+  .gs-result-art { max-height: 14vh; }
   .gs-bar {
     left: auto; right: calc(var(--gs-sar) + 6px); transform: none;
     bottom: 50%; translate: 0 50%;

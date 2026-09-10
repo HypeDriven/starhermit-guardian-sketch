@@ -19,3 +19,9 @@ Generated with MOSS-SoundEffect v2.0, 48 kHz mono Opus (96 kbps VBR, loudness-no
 | hint-glimmer.opus | hint | A soft sparkling glimmer, two gentle high shimmer notes suggesting a subtle clue. |
 | star-twinkle.opus | star | A high delicate twinkle, a tiny bright bell ping shimmering briefly. |
 | turn-skip.opus | skip | A quick airy whoosh, a fast light pass-by like a page being skipped. |
+| ember-sizzle.opus | block-ember | A hot ember landing on wet ink, a short sharp sizzle hiss with a tiny crackle, fading fast. |
+| gale-deflect.opus | block-gale | A gust of wind striking a thin wall and rushing off sideways, a quick airy whoosh deflected with a soft flutter. |
+| pebble-clack.opus | block-pebble | A small stone striking a hard wooden edge, one crisp dry clack with a short hollow ring. |
+| badge-unlock.opus | achievement | A warm achievement flourish, a soft brass-and-bell chord swelling briefly then a gentle sparkling tail. |
+| lesson-flourish.opus | lesson | A short cheerful completion jingle, three quick rising xylophone notes ending on a bright resolved ding. |
+| pause-hush.opus | pause | A soft muffled hush, like a hand gently laid over an open book, a low airy thump with a quick damped decay. |

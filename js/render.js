@@ -91,6 +91,16 @@ export function createRenderer(container, opts) {
   envGroup.add(desk);
 
   const pageMat = new THREE.MeshStandardMaterial({ color: 0xf2ecdf, roughness: 0.9, metalness: 0 });
+  // Authored paper grain (assets/paper-grain.webp). The flat theme colour is
+  // the fallback: if the texture never arrives the page simply stays plain.
+  new THREE.TextureLoader().load('./assets/paper-grain.webp', function (tex) {
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+    tex.repeat.set(4, 2.8);
+    tex.anisotropy = Math.min(4, renderer.capabilities.getMaxAnisotropy());
+    pageMat.map = tex;
+    pageMat.needsUpdate = true;
+  }, undefined, function () { /* keep the plain page */ });
   const pageEdgeMat = new THREE.MeshStandardMaterial({ color: 0xd8d0bc, roughness: 0.9, metalness: 0 });
   const pageW = FRAMING.WORLD_W / S, pageH = FRAMING.WORLD_H / S;
   const pageEdge = new THREE.Mesh(new THREE.BoxGeometry(pageW + 0.24, pageH + 0.24, 0.05), pageEdgeMat);

@@ -125,7 +125,24 @@
     'undo':       function () { blip(500, 0.08, 'triangle', 0.1, 'effects', ctx.currentTime, 380); caption('undo'); },
     'hint':       function () { blip(990, 0.12, 'sine', 0.1); blip(1320, 0.14, 'sine', 0.07, 'effects', ctx.currentTime + 0.07); caption('hint'); },
     'star':       function () { blip(1568, 0.18, 'sine', 0.1); },
-    'skip':       function () { noiseBurst(0.15, 0.2, 2400); }
+    'skip':       function () { noiseBurst(0.15, 0.2, 2400); },
+    // hazard-specific barrier impacts (fall back to the generic block layer)
+    'block-ember':  function () { noiseBurst(0.18, 0.3, 5200, undefined, 'highpass'); blip(variant(240), 0.07, 'sine', 0.08); caption('ember blocked'); },
+    'block-gale':   function () { noiseBurst(0.22, 0.28, 900); blip(variant(520), 0.16, 'sine', 0.05, 'effects', ctx.currentTime, 260); caption('gust deflected'); },
+    'block-pebble': function () { noiseBurst(0.05, 0.45, 1800); blip(variant(360), 0.05, 'triangle', 0.12); caption('pebble blocked'); },
+    'achievement':  function () {
+      [0, 7, 12].forEach(function (st, i) {
+        blip(392 * Math.pow(2, st / 12), 0.6, 'triangle', 0.11, 'effects', ctx.currentTime + i * 0.09);
+      });
+      caption('achievement unlocked');
+    },
+    'lesson':       function () {
+      [0, 4, 9].forEach(function (st, i) {
+        blip(659 * Math.pow(2, st / 12), 0.3, 'triangle', 0.12, 'effects', ctx.currentTime + i * 0.1);
+      });
+      caption('lesson complete');
+    },
+    'pause':        function () { noiseBurst(0.12, 0.18, 420); caption('paused'); }
   };
 
   // ---------- authored sample one-shots ----------

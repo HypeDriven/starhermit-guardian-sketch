@@ -109,6 +109,7 @@ let practiceSeed = (Math.random() * 0xffffffff) >>> 0;
 let lastSpawnSfx = 0, lastBounceSfx = 0;
 let presenceTimer = null;
 let releaseArmed = false;   // confirm-release assist
+let spawnTypeById = {};     // hazard id -> type, for material-specific block cues
 
 function inkLeft() { return session ? GSRules.inkRemaining(session.state) : 0; }
 
@@ -292,6 +293,8 @@ function doRelease() {
   updateMirror('storm released');
   const won = session.state.terminal && session.state.terminal.won;
   const simEvents = res.events.filter(function (e) { return e.tick != null; });
+  spawnTypeById = {};
+  ((session.state.trace && session.state.trace.spawns) || []).forEach(function (sp) { spawnTypeById[sp.id] = sp.hazard; });
   if (renderer && session.state.trace) {
     renderer.playTrace(session.state.trace, session.cfg, {
       speed: 1,
@@ -310,7 +313,8 @@ function onTraceEvent(ev) {
   if (ev.type === 'spawn') {
     if (now - lastSpawnSfx > 90) { sfx('spawn'); lastSpawnSfx = now; }
   } else if (ev.type === 'block') {
-    sfx('block');
+    const hz = spawnTypeById[ev.id];
+    sfx(hz && hz !== 'drop' ? 'block-' + hz : 'block'); // ink drops use the generic block layer
   } else if (ev.type === 'bounce') {
     if (now - lastBounceSfx > 140) { sfx('bounce'); lastBounceSfx = now; }
   } else if (ev.type === 'hit') {
@@ -361,7 +365,7 @@ function unlock(key, unlocked) {
   if (progress.achievements[key]) return;
   progress.achievements[key] = Date.now();
   unlocked.push(GSContent.ACHIEVEMENTS.find(function (a) { return a.key === key; }));
-  sfx('star');
+  sfx('achievement');
 }
 
 function finalizeProgress(won) {
@@ -436,6 +440,7 @@ function showResults(won, entries, boardLabel) {
 
   ui.showResults({
     headline: headline,
+    won: !!won,
     score: st.score,
     stars: stars,
     par: session.cfg.par,
@@ -705,6 +710,7 @@ function pauseGame(reason) {
   if (ui.isModalOpen()) return; // never transition without a visible pause panel
   transition('paused', reason);
   if (renderer) renderer.pauseTrace(); // freeze storm playback at its exact tick
+  sfx('pause');
   ui.showPause();
   updateMirror('paused');
 }
@@ -810,7 +816,7 @@ function lessonEvent(eventName) {
     }
     persist();
     ui.celebrateLearn('Lesson complete! ' + session.lesson.title);
-    sfx('win');
+    sfx('lesson');
     setTimeout(function () {
       if (session && session.lesson) startLesson(session.lessonIdx + 1);
     }, 1600);

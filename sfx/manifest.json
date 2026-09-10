@@ -88,5 +88,41 @@
     "seconds": 1,
     "prompt": "A quick airy whoosh, a fast light pass-by like a page being skipped.",
     "event": "skip"
+  },
+  {
+    "name": "ember-sizzle",
+    "seconds": 1,
+    "prompt": "A hot ember landing on wet ink, a short sharp sizzle hiss with a tiny crackle, fading fast.",
+    "event": "block-ember"
+  },
+  {
+    "name": "gale-deflect",
+    "seconds": 1,
+    "prompt": "A gust of wind striking a thin wall and rushing off sideways, a quick airy whoosh deflected with a soft flutter.",
+    "event": "block-gale"
+  },
+  {
+    "name": "pebble-clack",
+    "seconds": 1,
+    "prompt": "A small stone striking a hard wooden edge, one crisp dry clack with a short hollow ring.",
+    "event": "block-pebble"
+  },
+  {
+    "name": "badge-unlock",
+    "seconds": 2,
+    "prompt": "A warm achievement flourish, a soft brass-and-bell chord swelling briefly then a gentle sparkling tail.",
+    "event": "achievement"
+  },
+  {
+    "name": "lesson-flourish",
+    "seconds": 2,
+    "prompt": "A short cheerful completion jingle, three quick rising xylophone notes ending on a bright resolved ding.",
+    "event": "lesson"
+  },
+  {
+    "name": "pause-hush",
+    "seconds": 1,
+    "prompt": "A soft muffled hush, like a hand gently laid over an open book, a low airy thump with a quick damped decay.",
+    "event": "pause"
   }
 ]
