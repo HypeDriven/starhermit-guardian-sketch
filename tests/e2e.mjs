@@ -9,9 +9,11 @@
  * Two passes: desktop 1280x800 and mobile 390x844 (touch context).
  *
  * Self-contained: serves the repo over an embedded static server on an
- * ephemeral port (server.js is the StarHermit authoritative server and is
- * NOT used here). The one host route the client probes, /api/v1/time, is
- * answered by the embedded server; the game is fully playable offline.
+ * ephemeral port (server.js is the game's authoritative server and is
+ * NOT used here). The embedded server answers /api/v1/time plus minimal
+ * stubs of the game's own-server score/leaderboard routes so the wired
+ * client paths get real responses; hosted-mode platform calls are inert
+ * without a launch token. The game is fully playable offline.
  *
  * Run: npm run test:e2e
  */
@@ -48,12 +50,46 @@ const MIME = {
 };
 
 function createServer() {
+  // Minimal stand-in for the game's own server.js API surface so the wired
+  // client paths (score submit + board read) get real 200s in the harness.
+  const boardEntries = [];
   return http.createServer(async (req, res) => {
     try {
       const url = new URL(req.url, 'http://x');
       if (url.pathname === '/api/v1/time') {
         res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
         res.end(JSON.stringify({ now: Date.now() }));
+        return;
+      }
+      if (url.pathname === '/api/v1/leaderboard') {
+        const board = url.searchParams.get('board') || '';
+        const entries = boardEntries
+          .filter((e) => e.board === board)
+          .sort((a, b) => b.score - a.score)
+          .slice(0, 50);
+        res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+        res.end(JSON.stringify({ board, entries, validated: true }));
+        return;
+      }
+      if (url.pathname === '/api/v1/score' && req.method === 'POST') {
+        let raw = '';
+        await new Promise((resolve, reject) => {
+          req.on('data', (c) => { raw += c; if (raw.length > 200000) reject(new Error('too big')); });
+          req.on('end', resolve);
+          req.on('error', reject);
+        });
+        const body = JSON.parse(raw || '{}');
+        const entry = {
+          board: String(body.board || ''), name: String(body.name || 'guest'),
+          sessionId: String(body.sessionId || ''), score: (body.envelope && body.envelope.result) ? body.envelope.result.score : 0,
+          won: !!(body.envelope && body.envelope.result && body.envelope.result.won),
+          invalid: 0, durationMs: 0
+        };
+        boardEntries.push(entry);
+        const ranked = boardEntries.filter((e) => e.board === entry.board);
+        res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+        res.end(JSON.stringify({ ok: true, position: ranked.length, of: ranked.length,
+          top: ranked.slice(-10) }));
         return;
       }
       let rel = decodeURIComponent(url.pathname);

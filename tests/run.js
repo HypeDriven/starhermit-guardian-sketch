@@ -388,6 +388,29 @@ section('leaderboard ordering');
     'ties resolve: won, score, invalid, duration, session id');
 }
 
+/* ---------------- platform helpers ---------------- */
+section('platform zip + launch-token helpers');
+{
+  const Platform = require('../js/platform.js');
+  const saveJson = JSON.stringify({ v: 1, settings: { music: 0.5 }, progress: { stormBest: 42 } });
+  const payload = new TextEncoder().encode(saveJson);
+  const zip = Platform.zipStore('guardiansketch.save.json', payload);
+  ok(zip.length > payload.length, 'zip wraps payload');
+  const back = Platform.unzipFirstEntry(zip);
+  ok(new TextDecoder().decode(back) === saveJson, 'zip round trip');
+  const b64 = Platform.bytesToBase64(payload);
+  ok(Buffer.from(Platform.base64ToBytes(b64)).equals(Buffer.from(payload)), 'base64 round trip');
+  const claims = { sub: 'user-abcdef123456', game_scope: 'guardian-sketch', exp: 123 };
+  const jwt = 'h.' + Buffer.from(JSON.stringify(claims)).toString('base64url') + '.s';
+  const decoded = Platform.decodeJwtPayload(jwt);
+  ok(decoded && decoded.sub === 'user-abcdef123456' && decoded.game_scope === 'guardian-sketch',
+    'jwt payload decodes sub + game_scope');
+  ok(Platform.decodeJwtPayload('not-a-jwt') === null, 'garbage jwt rejected');
+  const platform = Platform.createPlatform({});
+  ok(platform.hosted() === false && platform.syncStatus() === 'offline',
+    'no token means offline in node');
+}
+
 /* ---------------- summary ---------------- */
 console.log('\n========================================');
 console.log(passed + ' passed, ' + failed + ' failed');

@@ -130,6 +130,7 @@ export function createUI(root, handlers) {
   // ---------- title ----------
   let titleNode = null;
   let dailyCountdownEl = null;
+  let syncStatusEl = null;
   function showTitle(data) {
     hideAll();
     titleNode = el('div', 'gs-title');
@@ -145,6 +146,9 @@ export function createUI(root, handlers) {
 
     dailyCountdownEl = el('p', 'gs-daily-countdown', data.nextDailyText || '');
     card.appendChild(dailyCountdownEl);
+
+    syncStatusEl = el('p', 'gs-sync-status', data.syncText || '');
+    card.appendChild(syncStatusEl);
 
     const grid = el('div', 'gs-title-grid');
     const play = btn('Play', 'primary big', function () { clickSfx(); H('onPlay'); });
@@ -163,6 +167,7 @@ export function createUI(root, handlers) {
     announce('Guardian Sketch title screen. Press Play to continue your journey.');
   }
   function updateDailyCountdown(text) { if (dailyCountdownEl) dailyCountdownEl.textContent = text; }
+  function updateSyncStatus(text) { if (syncStatusEl) syncStatusEl.textContent = text; }
 
   // ---------- mode setup ----------
   function hazardLegend(cfg) {
@@ -620,6 +625,7 @@ export function createUI(root, handlers) {
     toastReason: toastReason,
     showTitle: showTitle,
     updateDailyCountdown: updateDailyCountdown,
+    updateSyncStatus: updateSyncStatus,
     showModeSetup: showModeSetup,
     showJourney: showJourney,
     showPractice: showPractice,

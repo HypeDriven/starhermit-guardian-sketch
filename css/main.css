@@ -104,6 +104,7 @@ body.high-contrast .gs-panel, body.high-contrast .gs-learn-card { background-ima
 .gs-tagline { color: var(--gs-muted); margin: 0.4em 0 0.8em; font-size: clamp(13px, 2vh, 18px); }
 .gs-title-stats { font-size: clamp(12px, 1.8vh, 16px); color: var(--gs-fg); opacity: 0.85; }
 .gs-daily-countdown { font-variant-numeric: tabular-nums; color: var(--gs-muted); font-size: 0.85em; margin-top: 0.3em; }
+.gs-sync-status { color: var(--gs-muted); font-size: 0.8em; margin-top: 0.3em; opacity: 0.9; }
 .gs-title-grid {
   display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.7em; margin-top: 1.2em;
 }

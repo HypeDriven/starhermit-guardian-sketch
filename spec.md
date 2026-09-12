@@ -19,7 +19,7 @@ File map (everything that ships or matters):
 
 | Path | Responsibility |
 |---|---|
-| `index.html` | Entry point; loads UMD globals (`GSRNG`, `GSRules`, `GSContent`, `GSStore`, `GSAudio`) then `js/main.js` as a module |
+| `index.html` | Entry point; loads UMD globals (`GSRNG`, `GSRules`, `GSContent`, `GSStore`, `GSPlatform`, `GSAudio`) then `js/main.js` as a module |
 | `js/rng.js` | mulberry32 PRNG, FNV-1a string hash, three derived streams (rules / decor / av) |
 | `js/rules.js` | State, legality, fixed-step hazard simulation, scoring, stars, hint search, replay validation, serialization |
 | `js/content.js` | Hazard types, 5 themes, 40 journey stages, 6 challenges, 3 practice presets, Tempest Stand generator, daily generator, 5 lessons, 9 achievements |
@@ -28,11 +28,12 @@ File map (everything that ships or matters):
 | `js/render.js` | Three.js scene: desk, page, wisps, obstacles, emitters, tube strokes, pooled hazards, particles, trace playback, quality tiers |
 | `js/ui.js` | DOM shell: title, setup, journey grid, HUD/tray, pause, settings, results, help, learn card, scores, live regions, toasts, captions, board mirror |
 | `js/main.js` | App state machine, session/commands, input (pointer, keyboard pen, gamepad), progression, replay envelope, server-time probe, boot |
+| `js/platform.js` | StarHermit glue: fragment launch token (read once, stripped, 45-min refresh), profile nickname, zip+base64 cloud-save mirror (debounced + pagehide flush, remote-preferred load), hosted read-only boards, own-server score submit with graceful fallback |
 | `css/main.css` | Complete stylesheet, responsive rules, safe areas, accessibility body classes |
 | `server.js` | StarHermit game script: static host plus `/api/v1/*` with replay-validated score submission |
 | `assets/` | `key-art.webp`, `results-saved.webp`, `results-hit.webp`, `paper-grain.webp` |
 | `sfx/` | 21 Opus clips; `manifest.txt` (canonical binding), `manifest.json` (generator entries), `manifest.md` (generated listing) |
-| `tests/run.js` | `npm test`: 67 rules/content/server/store checks, zero dependencies |
+| `tests/run.js` | `npm test`: 73 rules/content/server/store/platform checks, zero dependencies |
 | `tests/e2e.mjs` | `npm run test:e2e`: Playwright playthrough on desktop and mobile viewports |
 | `starhermit.txt`, `coverart.png`, `icon.png`, `favicon.svg`, `LICENSE.md` | Platform manifest, cover, icons, PolyForm Noncommercial 1.0.0 |
 
@@ -229,22 +230,26 @@ Manifest `starhermit.txt`: `name=Guardian Sketch`, `launch=index.html`, `owner=�
 Used:
 - **Server time:** the client probes `GET /api/v1/time` once at boot (`fetchServerTime`) and uses the round-trip-adjusted offset for the daily boundary and countdown; offline it falls back to local time.
 - **Game script (`server.js`):** serves the distribution (refuses `data/` and unknown extensions), answers `/api/v1/time`, `/api/v1/daily`, `/api/v1/leaderboard?board=`, and `POST /api/v1/score` which replays the envelope (`schema 1`, content version, seed, config id, initial hash, ordered commands with ids, per-command state hashes, result) through the same `GSRules`, rejects tampered scores, stale content versions, seed/config mismatches and more than 8 invalid commands, applies a 20/min rate limit and idempotent session ids, and stores boards in `data/leaderboards.json`. `presence`, `activity` and `telemetry` routes accept and discard.
-- **Launch token:** read from the URL in memory only; never persisted.
+- **Launch token (`js/platform.js`):** read once from the `#game_token=` URL fragment (local-dev query fallbacks only), then stripped via `history.replaceState`; the JWT payload (decoded, not verified) provides `sub` and `game_scope` (the slug, never hard-coded). The token is in-memory only, sent as `Authorization: Bearer` on every platform call, and re-minted every 45 min via `POST /api/v1/games/{slug}/launch-token` (60 s retry). Hosted mode activates iff a token was read.
+- **Identity:** hosted, the display name comes from `GET /api/v1/users/{sub}/profile` (nickname only — never `/api/v1/me`, never usernames), with a `"Player " + sub.slice(0,8)` fallback; it is shown in the title sync line and on leaderboard entries. Offline keeps the generated `guest-xxxx` name.
+- **Cloud save:** hosted, the save doc `{v, settings, progress}` is mirrored to the platform slot `GET/PUT /api/v1/me/cloud-saves/{slug}` as a stored (uncompressed) zip of JSON + base64. Load at boot is remote-preferred (404 keeps the local cache); saves debounce ~2 s and flush on `pagehide`/hidden; a sync status line (signed-in name · saving/synced/error) sits on the title screen. localStorage remains the offline cache.
+- **Leaderboards:** hosted, clients never submit — the global board is read-only via `GET /api/v1/games/{slug}` → `leaderboardId` → `GET /api/v1/leaderboards/{leaderboardId}/entries`, with userIds resolved to nicknames; without a `leaderboardId` only local records show. Against the game's own `server.js` the client submits ranked envelopes to `POST /api/v1/score` and reads `GET /api/v1/leaderboard?board=`, labelled "validated"; any failure (including on-platform 404s, which are never requested hosted) degrades to on-device records labelled "casual (unvalidated)". Personal bests always live in the save doc (local + cloud).
+- **Daily:** the daily config is resolved locally (deterministic, identical on the server); `server.js`'s `/api/v1/daily` remains redundant.
 
-Not used (by design, per https://wiki.starhermit.com/ conventions for solo titles): realtime rooms, relay, matchmaking, chat, voice, invitations, cloud save. The client currently never calls the score or leaderboard routes; ranked rounds write a replay envelope to `localStorage` (`guardiansketch.lastreplay`) and boards shown in the UI are on-device, labelled "casual (unvalidated)". Identity is a generated guest name (`guest-xxxx`); achievements and progress are local.
+Not used (by design, per https://wiki.starhermit.com/ conventions for solo titles): realtime rooms, relay, matchmaking, chat, voice, invitations. Achievements stay local (part of the cloud-saved doc); `server.js` is a Node host, not a Jint game script, so there is no script-owned unlock path. Telemetry stays local-only and is never sent.
 
 ## 13. Technical architecture
 
-- **Modules:** `rules` (pure, no Date/DOM), `content` (data + generators), `store` (save v1 with FNV checksum, memory fallback when storage is blocked, future versions never clobbered), `audio`, `render`, `ui`, `main` (owner of every transition, session log, progression). `render` and `ui` only read state; `main` mutates it through `applyValidated` (shape check → `applyCommand` → hash append).
+- **Modules:** `rules` (pure, no Date/DOM), `content` (data + generators), `store` (save v1 with FNV checksum, memory fallback when storage is blocked, future versions never clobbered), `platform` (StarHermit token/profile/cloud-save/board glue), `audio`, `render`, `ui`, `main` (owner of every transition, session log, progression). `render` and `ui` only read state; `main` mutates it through `applyValidated` (shape check → `applyCommand` → hash append).
 - **Determinism and replay:** fixed 60 Hz step, integer stroke points, `atMs` quantised to 100 ms, stable iteration orders, canonical JSON hashing (`stableStringify` → FNV-1a) with `trace`/`events` excluded. The session keeps `commands[]` and `stateHashes[]`; undo replays them; the envelope is what the server validates.
-- **Persistence:** `guardiansketch.save.v1` (settings + progress + stats + achievements), `guardiansketch.leaderboards.v1` (≤ 400 local entries), `guardiansketch.lastreplay`, `guardiansketch.playername`, `guardiansketch.telemetry` (≤ 60 local funnel events, never sent).
+- **Persistence:** `guardiansketch.save.v1` (settings + progress + stats + achievements; also mirrored to the platform cloud-saves slot when signed in), `guardiansketch.leaderboards.v1` (≤ 400 local entries), `guardiansketch.lastreplay`, `guardiansketch.playername` (offline guest name), `guardiansketch.telemetry` (≤ 60 local funnel events, never sent).
 - **Rendering budget:** auto tier from DPR/cores/screen; tiers set pixel ratio cap 1 / 1.5 / 2, shadow map 0 / 1024 / 2048, particle cap 60 / 160 / 300. Geometry is pooled per hazard type; particles are a fixed pool with `raycast` disabled; no per-frame allocations in the loop; shaders are pre-compiled at boot; the loop stops while hidden. WebGL context loss re-applies tier and theme; no-WebGL devices get menus and a warning.
 - **Trace playback:** frames every 2 ticks, linear interpolation by wall clock, events fired by tick, `skip` and natural completion both call `finishPlayback` which places every hazard at the last frame and flushes events before `onDone`.
 - **E2E drive:** `tests/e2e.mjs` starts its own static server on an ephemeral port, launches Chrome with SwiftShader, and only uses what a player sees: clicks Play/Start, moves the keyboard pen by counting rAF frames, presses Space/R/P/Escape/S, reads the HUD and results text.
 
 ## 14. Testing and acceptance criteria
 
-`npm test` (`tests/run.js`, 67 checks): initial state and legal actions; every invalid reason; stroke and ink limits; tick monotonicity; win/loss/resign scoring and star rules; commands after terminal; 30 randomised replays hash-identical; 500 fuzzed commands with no NaN; serialization round trip and save migration; hint legality and success on stage 1; 40 stages, 6 challenges, 3 practice presets, Tempest Stand and 366 dailies all structurally valid with a reachable win; daily immutability; 5 completable lessons; golden easy/medium/hard sessions; interrupted-and-resumed equality; server envelope acceptance and rejection cases; leaderboard tie order.
+`npm test` (`tests/run.js`, 73 checks): initial state and legal actions; every invalid reason; stroke and ink limits; tick monotonicity; win/loss/resign scoring and star rules; commands after terminal; 30 randomised replays hash-identical; 500 fuzzed commands with no NaN; serialization round trip and save migration; hint legality and success on stage 1; 40 stages, 6 challenges, 3 practice presets, Tempest Stand and 366 dailies all structurally valid with a reachable win; daily immutability; 5 completable lessons; golden easy/medium/hard sessions; interrupted-and-resumed equality; server envelope acceptance and rejection cases; leaderboard tie order.
 
 `npm run test:e2e` (desktop 1280×800 and mobile 390×844 touch): title visible → Play → stage 1 setup → HUD shows "520 ink · 3 strokes" → keyboard-pen stroke → Release → pause freezes playback for 12 s → Escape resumes → Skip → "Saved!" with stars → save document has j01 stars and stats → Next level → pause blocks Space → resume → quit → Settings toggles and persists Reduced motion → Help opens and closes; fails on any console error.
 
@@ -269,19 +274,19 @@ QA bar (checkable): every feature reachable by clicks/taps; no console errors or
 
 ## 16. Known limitations
 
-- Ranked boards are on-device only; the validated server boards exist but the client does not submit to or read from them.
+- On-platform (signed in), scoreboards are read-only global leaderboards plus on-device records; only the game's own `server.js` deployment accepts validated submissions.
 - The **Color palette: High visibility** setting is stored and shown but has no effect on rendering (High contrast is the working option).
 - The **Voice** bus slider controls a bus nothing plays on.
 - Hint search runs synchronously on the main thread; on dense stages the two-stroke pass can stall input for a moment.
 - Gamepad B while the pen is down commits the stroke rather than cancelling it (it mirrors Space).
-- Achievements, guest name and progress are per browser; clearing site data resets them.
+- Signed-out play is per browser: achievements, guest name and progress are local-only and clearing site data resets them (signed-in play mirrors the save doc to the platform cloud slot).
 - The page under SwiftShader (headless CI) renders more beige than on GPU browsers because of ACES tone mapping; not a defect on real hardware.
 - The `C` key only re-fits the camera; there is no free camera to reset.
 
 ## 17. Design intent not yet implemented
 
 - Localization to en-GB, es-419, es-ES, de-DE, fr-FR, fr-CA, pt-BR and it-IT with a string table and language selection from the host locale.
-- Client submission of the replay envelope to `POST /api/v1/score` with global and friends-filtered boards, and StarHermit identity for display names.
-- Idempotent achievement delivery through the platform.
+- Friends-filtered platform leaderboards (the hosted global board is read-only per the platform contract; there is no client submission path).
+- Idempotent achievement delivery through the platform (achievements are local today; `server.js` is not a Jint game script, so there is no script-owned unlock path).
 - A high-visibility hazard palette bound to the existing setting.
 - Cancel-without-commit for gamepad B and pointer cancel parity.

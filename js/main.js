@@ -5,7 +5,7 @@
 import { createRenderer } from './render.js';
 import { createUI } from './ui.js';
 
-/* global GSRNG, GSRules, GSContent, GSStore, GSAudio */
+/* global GSRNG, GSRules, GSContent, GSStore, GSAudio, GSPlatform */
 
 // ---------- constants ----------
 const REPLAY_KEY = 'guardiansketch.lastreplay';
@@ -55,12 +55,27 @@ function telemetry(event) {
 let doc = GSStore.load();
 let settings = doc.settings;
 let progress = doc.progress;
-function persist() { GSStore.save({ v: doc.v, settings: settings, progress: progress }); }
+function persist() {
+  GSStore.save({ v: doc.v, settings: settings, progress: progress });
+  platform.scheduleCloudSave({ v: doc.v, settings: settings, progress: progress });
+}
 
-// ---------- launch token (never persisted) ----------
-const params = new URLSearchParams(location.search);
-const launchToken = params.get('launchToken'); // may be null; used only in-memory if needed
-const launchScope = params.get('scope');
+// ---------- platform glue (launch token, profile, cloud save, boards) ----------
+// Hosted mode activates iff a #game_token= fragment token (or a local-dev
+// query fallback) was read; the token is used in-memory only, never persisted.
+const platform = GSPlatform.createPlatform({ onSyncStatus: function () { updateSyncLine(); } });
+let syncLineText = 'Offline — progress is saved on this device';
+function updateSyncLine() {
+  if (platform.hosted()) {
+    const syncText = { saving: 'Cloud save: saving…', synced: 'Cloud save: synced',
+      error: 'Cloud save: offline — will retry', offline: 'Cloud save: offline' };
+    syncLineText = 'Signed in as ' + platform.displayName() + '  ·  ' +
+      (syncText[platform.syncStatus()] || syncText.offline);
+  } else {
+    syncLineText = 'Offline — progress is saved on this device';
+  }
+  if (ui) ui.updateSyncStatus(syncLineText);
+}
 
 // ---------- capability detection ----------
 function webglAvailable() {
@@ -77,9 +92,10 @@ canvasWrap.className = 'gs-canvas-wrap';
 rootEl.appendChild(canvasWrap);
 
 // ---------- server time ----------
-// /api/v1/time is the one host route guaranteed to exist; probe it once at
-// startup. Everything else under /api/v1/* is not guaranteed, so no other
-// route is ever requested — hosted features degrade to local behaviour.
+// /api/v1/time is probed once at startup for the daily boundary; the same
+// origin also serves the platform contract when a launch token is present
+// (profile, cloud save, read-only boards) and the game's own server.js
+// endpoints when it is the host. Every call fails soft to local behaviour.
 let serverOffset = null; // serverNow - localNow
 let serverNowMs = function () { return serverOffset != null ? Date.now() + serverOffset : Date.now(); };
 
@@ -488,6 +504,7 @@ function buildEnvelope() {
 }
 
 function playerName() {
+  if (platform.hosted()) return platform.displayName(); // platform nickname (or Player-id8 fallback)
   let n = null;
   try { n = localStorage.getItem(PLAYER_KEY); } catch (e) {}
   if (!n) {
@@ -517,12 +534,23 @@ async function submitScore(envelope, done) {
   const score = session.state.score.total;
   const won = !!(session.state.terminal && session.state.terminal.won);
   storeLocalEntry(board, score, won);
-  // /api/v1/score is not guaranteed to exist on the host, so scores are
-  // kept on-device only; no request is ever issued.
   const local = GSStore.sortEntries(localEntries(board)).map(function (e) {
     return Object.assign({}, e, { self: e.sessionId === sessionId });
   });
-  done(local.slice(0, 10), 'casual (unvalidated)');
+  const finishLocal = function () { done(local.slice(0, 10), 'casual (unvalidated)'); };
+  if (platform.hosted()) {
+    // Platform leaderboards are server-owned: clients read, never submit.
+    // Personal-best records stay local and are mirrored by the cloud save.
+    const entries = await platform.hostedBoardEntries();
+    if (entries && entries.length) done(entries.slice(0, 10), 'global');
+    else finishLocal();
+    return;
+  }
+  // The game's own server.js validates the envelope by replay; when it is
+  // not the host (or is unreachable) scores stay on-device.
+  const res = await platform.submitEnvelope(board, envelope, playerName(), sessionId);
+  if (res && res.entries) done(res.entries.slice(0, 10), 'validated');
+  else finishLocal();
 }
 
 // ---------- input: pointer drawing ----------
@@ -835,6 +863,7 @@ function toTitle() {
     totalStars: totalStars(),
     dailyDone: dailyDone != null ? dailyDone : null,
     nextDailyText: nextDailyText(),
+    syncText: syncLineText,
     compatWarning: glOk ? null : 'WebGL is unavailable — menus work, but the 3D page cannot be shown.'
   });
   updateMirror(null);
@@ -1000,16 +1029,43 @@ function openScores() {
   }
   if (scoresTab === 'device') {
     render(GSStore.sortEntries(localEntries(scoresBoard)), 'No local entries for this board yet.');
+  } else if (platform.hosted()) {
+    // Global tab: read-only platform leaderboard; local records when the
+    // game has no leaderboard on-platform.
+    const board = scoresBoard;
+    platform.hostedBoardEntries().then(function (entries) {
+      if (board !== scoresBoard) return;
+      if (entries && entries.length) render(entries, 'No entries yet.');
+      else render(GSStore.sortEntries(localEntries(board)), 'No scores on this device for this board yet.');
+    });
   } else {
-    // /api/v1/leaderboard is not guaranteed on the host; show the local
-    // board instead of requesting a route that may not exist.
-    render(GSStore.sortEntries(localEntries(scoresBoard)), 'No scores on this device for this board yet.');
+    // Global tab against the game's own server.js when it is the host.
+    const board = scoresBoard;
+    platform.ownBoardEntries(board, sessionId).then(function (res) {
+      if (board !== scoresBoard) return;
+      if (res && res.entries) render(res.entries, 'No entries on the server for this board yet.');
+      else render(GSStore.sortEntries(localEntries(board)), 'No scores on this device for this board yet.');
+    });
   }
 }
 
 // ---------- boot ----------
-function boot() {
+async function boot() {
   transition('boot', 'init');
+  if (platform.hosted()) {
+    // Remote-preferred cloud load: the platform copy wins on conflict;
+    // localStorage stays the offline cache either way.
+    const remote = await platform.loadCloudSave();
+    if (remote) {
+      const migrated = GSStore.migrate(remote);
+      if (migrated) {
+        doc = migrated;
+        settings = doc.settings;
+        progress = doc.progress;
+        GSStore.save({ v: doc.v, settings: settings, progress: progress });
+      }
+    }
+  }
   ui = createUI(rootEl, {
     onUiSound: function () { sfx('ui'); },
     onPlay: function () { startJourneyLevel(firstUncompletedJourney()); },
@@ -1068,7 +1124,9 @@ function boot() {
   ensurePenMarker();
   requestAnimationFrame(inputTick);
   fetchServerTime().then(function () { if (appState === 'title') ui.updateDailyCountdown(nextDailyText()); });
-  transition('profile-ready', 'guest profile loaded');
+  if (platform.hosted()) platform.loadProfile().then(function () { updateSyncLine(); });
+  updateSyncLine();
+  transition('profile-ready', platform.hosted() ? 'hosted profile loading' : 'guest profile loaded');
   toTitle();
 }
 
