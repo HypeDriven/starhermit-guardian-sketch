@@ -440,6 +440,7 @@ export function createRenderer(container, opts) {
     hemi.groundColor.setHex(p.desk);
     scene.fog = new THREE.Fog(p.fog, 14, 34);
     scene.background = new THREE.Color(p.fog);
+    fitFog();
     // refresh pooled hazard colors
     Object.keys(hazardPools).forEach(function (t) { hazardMaterial(t); });
   }
@@ -643,6 +644,16 @@ export function createRenderer(container, opts) {
     camera.position.set(PAGE_CX, baseCamY, dist + FRAMING.CAM_LIFT * 0);
     camera.lookAt(PAGE_CX, PAGE_CY - worldShift, 0);
     camera.updateProjectionMatrix();
+    fitFog();
+  }
+
+  // Decorative fog starts beyond the page: a narrow portrait viewport pulls
+  // the camera far back, and fixed fog bounds would swallow the whole board.
+  function fitFog() {
+    if (!scene.fog) return;
+    const dist = camera.position.z;
+    scene.fog.near = Math.max(14, dist + 6);
+    scene.fog.far = Math.max(34, dist + 26);
   }
 
   // ---------- context loss ----------
