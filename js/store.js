@@ -15,7 +15,7 @@
   var DEFAULT_SETTINGS = {
     music: 0.6, effects: 0.9, ambience: 0.5, voice: 0.8,
     muted: false, captions: false,
-    graphicsTier: 'auto',       // auto | low | medium | high
+    graphics: {},               // {preset: auto|low|balanced|high|ultra, render_scale, adaptive, show_fps, <category>: tier}
     theme: 'graphite',
     reducedMotion: false,
     highContrast: false,
@@ -53,7 +53,15 @@
     if (!doc || typeof doc !== 'object') return null;
     if (doc.v > SAVE_VERSION) return null; // future format: don't clobber
     doc.v = SAVE_VERSION;
+    var legacyTier = doc.settings && doc.settings.graphicsTier;
     doc.settings = Object.assign({}, DEFAULT_SETTINGS, doc.settings || {});
+    if (legacyTier !== undefined) { // old single quality tier → graphics preset
+      if (!doc.settings.graphics || !doc.settings.graphics.preset) {
+        doc.settings.graphics = { preset: { low: 'low', medium: 'balanced', high: 'high' }[legacyTier] || 'auto' };
+      }
+      delete doc.settings.graphicsTier;
+    }
+    if (!doc.settings.graphics || typeof doc.settings.graphics !== 'object') doc.settings.graphics = {};
     doc.progress = Object.assign(defaultProgress(), doc.progress || {});
     doc.progress.stats = Object.assign(defaultProgress().stats, doc.progress.stats || {});
     return doc;

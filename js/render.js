@@ -4,6 +4,16 @@
  * trace data; it never touches rules truth.
  */
 import * as THREE from 'three';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { SMAAPass } from 'three/addons/postprocessing/SMAAPass.js';
+import { FXAAShader } from 'three/addons/shaders/FXAAShader.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { detectPreset, describe, resolve, SHADOW_MAP, PARTICLE_CAP } from './gfx.js';
 
 // ---------- framing constants (authored, not magic) ----------
 export const FRAMING = {
@@ -31,17 +41,88 @@ const _ndc = new THREE.Vector2();
 const _ray = new THREE.Raycaster();
 const _planeHits = [];
 
-const TIER_DPR = { low: 1, medium: 1.5, high: 2 };
-const TIER_SHADOW = { low: 0, medium: 1024, high: 2048 };
-const TIER_PARTICLES = { low: 60, medium: 160, high: 300 };
+// Post-processing grade: gentle S-curve contrast, a touch of saturation, warm
+// highlights / cool shadows and a soft vignette (display-space in and out).
+const GradeShader = {
+  uniforms: { tDiffuse: { value: null }, uAmount: { value: 1.0 }, uVignette: { value: 0.2 } },
+  vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+  fragmentShader: [
+    'uniform sampler2D tDiffuse; uniform float uAmount; uniform float uVignette;',
+    'varying vec2 vUv;',
+    'void main() {',
+    '  vec4 src = texture2D(tDiffuse, vUv);',
+    '  vec3 c = clamp(src.rgb, 0.0, 1.0);',
+    '  vec3 s = mix(c, c * c * (3.0 - 2.0 * c), 0.18);',
+    '  float l = dot(s, vec3(0.299, 0.587, 0.114));',
+    '  s = mix(vec3(l), s, 1.07);',
+    '  s *= mix(vec3(0.97, 0.99, 1.04), vec3(1.03, 1.0, 0.97), smoothstep(0.2, 0.8, l));',
+    '  c = mix(c, s, uAmount);',
+    '  float d = length((vUv - 0.5) * vec2(1.0, 0.9));',
+    '  c *= 1.0 - uVignette * smoothstep(0.38, 0.9, d);',
+    '  gl_FragColor = vec4(c, src.a);',
+    '}'
+  ].join('\n')
+};
 
-function pickAutoTier() {
-  const dpr = Math.min(window.devicePixelRatio || 1, 3);
-  const cores = navigator.hardwareConcurrency || 4;
-  const small = Math.min(window.screen.width, window.screen.height) < 760;
-  if (dpr > 1.5 && cores >= 8 && !small) return 'high';
-  if (cores <= 4 || small || dpr <= 1) return 'medium';
-  return 'medium';
+// Unmasked GPU name (when the browser exposes it) for Auto quality detection.
+function gpuName(renderer) {
+  try {
+    const gl = renderer.getContext();
+    const ext = gl.getExtension('WEBGL_debug_renderer_info');
+    return String(ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER) || '');
+  } catch (e) { return ''; }
+}
+function touchDevice() {
+  try { return matchMedia('(pointer: coarse)').matches && !matchMedia('(any-pointer: fine)').matches; } catch (e) { return false; }
+}
+
+// Procedural desk wood grain (greyscale, multiplied by the theme's desk colour).
+function woodTexture() {
+  const c = document.createElement('canvas');
+  c.width = 512; c.height = 512;
+  const g = c.getContext('2d');
+  g.fillStyle = '#d8d8d8'; g.fillRect(0, 0, 512, 512);
+  let seed = 7;
+  const rnd = function () { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
+  for (let i = 0; i < 26; i++) { // planks
+    const y0 = i * 512 / 26;
+    const shade = 222 + Math.floor(rnd() * 30);
+    g.fillStyle = 'rgb(' + shade + ',' + shade + ',' + shade + ')';
+    g.fillRect(0, y0, 512, 512 / 26);
+  }
+  g.globalAlpha = 0.16;
+  for (let i = 0; i < 420; i++) { // grain streaks
+    const y = rnd() * 512, len = 60 + rnd() * 300, x = rnd() * 512;
+    const v = Math.floor(120 + rnd() * 120);
+    g.strokeStyle = 'rgb(' + v + ',' + v + ',' + v + ')';
+    g.lineWidth = 0.6 + rnd() * 1.6;
+    g.beginPath(); g.moveTo(x, y);
+    g.bezierCurveTo(x + len * 0.3, y + (rnd() - 0.5) * 6, x + len * 0.6, y + (rnd() - 0.5) * 6, x + len, y + (rnd() - 0.5) * 4);
+    g.stroke();
+  }
+  g.globalAlpha = 0.35;
+  g.fillStyle = '#9a9a9a';
+  for (let i = 0; i < 27; i++) g.fillRect(0, Math.round(i * 512 / 26), 512, 1.5); // plank seams
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(4.5, 3);
+  return tex;
+}
+
+// Soft round sprite for dust motes and the wisp halo.
+function softDiscTexture() {
+  const c = document.createElement('canvas');
+  c.width = c.height = 128;
+  const g = c.getContext('2d');
+  const grad = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+  grad.addColorStop(0, 'rgba(255,255,255,1)');
+  grad.addColorStop(0.35, 'rgba(255,255,255,0.55)');
+  grad.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = grad; g.fillRect(0, 0, 128, 128);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
 }
 
 export function createRenderer(container, opts) {
@@ -72,25 +153,28 @@ export function createRenderer(container, opts) {
   scene.add(envGroup, gameGroup, ghostGroup, fxGroup);
 
   // ---------- lights ----------
+  // Warm desk-lamp key (shadow caster), hemisphere fill and a faint cool rim
+  // from the opposite side so tubes and the wisp read as round.
   const key = new THREE.DirectionalLight(0xfff2dd, 2.2);
-  key.position.set(4, 9, 7);
   key.castShadow = true;
   key.shadow.mapSize.set(1024, 1024);
-  key.shadow.camera.left = -7; key.shadow.camera.right = 7;
-  key.shadow.camera.top = 6; key.shadow.camera.bottom = -2;
-  key.shadow.camera.near = 1; key.shadow.camera.far = 30;
-  key.shadow.bias = -0.0008;
+  key.shadow.bias = -0.0006;
+  key.shadow.normalBias = 0.01;
   const hemi = new THREE.HemisphereLight(0xfff4e0, 0x2b2f3a, 0.85);
-  envGroup.add(key, hemi);
+  const rim = new THREE.DirectionalLight(0xbcd4ff, 0);
+  rim.position.set(PAGE_CX - 6, PAGE_CY + 4, 3);
+  rim.target.position.set(PAGE_CX, PAGE_CY, 0);
+  envGroup.add(key, key.target, hemi, rim, rim.target);
 
   // ---------- desk + page ----------
-  const deskMat = new THREE.MeshStandardMaterial({ color: 0x2b2f3a, roughness: 0.95, metalness: 0 });
-  const desk = new THREE.Mesh(new THREE.PlaneGeometry(40, 26), deskMat);
+  const deskMat = new THREE.MeshStandardMaterial({ color: 0x2b2f3a, roughness: 0.8, metalness: 0, envMapIntensity: 0.35 });
+  const desk = new THREE.Mesh(new THREE.PlaneGeometry(90, 64), deskMat);
   desk.position.set(PAGE_CX, PAGE_CY, -0.5);
   desk.receiveShadow = true;
   envGroup.add(desk);
 
-  const pageMat = new THREE.MeshStandardMaterial({ color: 0xf2ecdf, roughness: 0.9, metalness: 0 });
+  const pageMat = new THREE.MeshStandardMaterial({ color: 0xf2ecdf, roughness: 0.9, metalness: 0, envMapIntensity: 0.2 });
+  let paperTex = null;
   // Authored paper grain (assets/paper-grain.webp). The flat theme colour is
   // the fallback: if the texture never arrives the page simply stays plain.
   new THREE.TextureLoader().load('./assets/paper-grain.webp', function (tex) {
@@ -98,8 +182,9 @@ export function createRenderer(container, opts) {
     tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
     tex.repeat.set(4, 2.8);
     tex.anisotropy = Math.min(4, renderer.capabilities.getMaxAnisotropy());
+    paperTex = tex;
     pageMat.map = tex;
-    pageMat.needsUpdate = true;
+    applyDetail();
   }, undefined, function () { /* keep the plain page */ });
   const pageEdgeMat = new THREE.MeshStandardMaterial({ color: 0xd8d0bc, roughness: 0.9, metalness: 0 });
   const pageW = FRAMING.WORLD_W / S, pageH = FRAMING.WORLD_H / S;
@@ -108,7 +193,21 @@ export function createRenderer(container, opts) {
   const page = new THREE.Mesh(new THREE.BoxGeometry(pageW, pageH, 0.04), pageMat);
   page.position.set(PAGE_CX, PAGE_CY, FRAMING.PAGE_Z - 0.02);
   page.receiveShadow = true;
+  page.castShadow = true;
+  pageEdge.castShadow = true;
   gameGroup.add(pageEdge, page);
+
+  // Detail: a couple of loose sheets under the page so it reads as a sketchbook.
+  const underSheets = new THREE.Group();
+  [[0.1, -0.08, -0.012, -0.09], [-0.14, -0.05, 0.018, -0.13]].forEach(function (o) {
+    const sh = new THREE.Mesh(new THREE.BoxGeometry(pageW + 0.1, pageH + 0.1, 0.02), pageEdgeMat);
+    sh.position.set(PAGE_CX + o[0], PAGE_CY + o[1], o[3]);
+    sh.rotation.z = o[2];
+    sh.castShadow = true; sh.receiveShadow = true;
+    underSheets.add(sh);
+  });
+  underSheets.visible = false;
+  envGroup.add(underSheets);
 
   // Invisible pick plane (slightly padded so strokes near the edge raycast).
   const pad = FRAMING.BOUNDS_PAD / S;
@@ -120,14 +219,19 @@ export function createRenderer(container, opts) {
   gameGroup.add(pickPlane);
 
   // ---------- shared materials / geometry ----------
-  const inkMat = new THREE.MeshStandardMaterial({ color: 0x2a2e38, roughness: 0.55, metalness: 0.05 });
-  const creatureMat = new THREE.MeshStandardMaterial({ color: 0x3b4d8f, roughness: 0.5, emissive: 0x3b4d8f, emissiveIntensity: 0.12 });
+  // Physical materials: clearcoat/sheen are switched on by the Surface detail
+  // option (zero = the plain standard path).
+  const inkMat = new THREE.MeshPhysicalMaterial({ color: 0x2a2e38, roughness: 0.55, metalness: 0.05, envMapIntensity: 0.9 });
+  const creatureMat = new THREE.MeshPhysicalMaterial({ color: 0x3b4d8f, roughness: 0.5, emissive: 0x3b4d8f, emissiveIntensity: 0.12, sheenColor: 0xc8d4ff });
   const eyeMat = new THREE.MeshStandardMaterial({ color: 0x14161c, roughness: 0.4 });
   const glowMat = new THREE.MeshBasicMaterial({ color: 0xe8a84b, transparent: true, opacity: 0.22, depthWrite: false });
   const ghostMat = new THREE.MeshBasicMaterial({ color: 0xe8a84b, transparent: true, opacity: 0.45, depthWrite: false });
   const hintMat = new THREE.MeshBasicMaterial({ color: 0xe8a84b, transparent: true, opacity: 0.55, depthWrite: false });
   const obstacleMat = new THREE.MeshStandardMaterial({ color: 0x3a3f4c, roughness: 0.85 });
-  const emitterMat = new THREE.MeshStandardMaterial({ color: 0x555c6e, roughness: 0.6, metalness: 0.2 });
+  const emitterMat = new THREE.MeshStandardMaterial({ color: 0x555c6e, roughness: 0.4, metalness: 0.6 });
+  const discTex = softDiscTexture();
+  const haloMat = new THREE.MeshBasicMaterial({ color: 0xe8a84b, map: discTex, transparent: true, opacity: 0.5, depthWrite: false, blending: THREE.AdditiveBlending });
+  const haloGeo = new THREE.PlaneGeometry(1, 1);
 
   const creatureGeo = new THREE.SphereGeometry(1, 24, 18);
   const eyeGeo = new THREE.SphereGeometry(0.07, 10, 8);
@@ -147,12 +251,17 @@ export function createRenderer(container, opts) {
   let palette = null;
   let highContrast = false;
   let reducedMotion = false;
-  let tier = 'medium';
+  const gpu = gpuName(renderer);
+  const detected = detectPreset(gpu, touchDevice());
+  let q = resolve({}, 'low');      // resolved graphics settings (see gfx.js)
+  let gfxSaved = null;
   let cfg = null;
   let decorRng = null;
   let visible = true;
   let disposed = false;
-  let particleCap = TIER_PARTICLES.medium;
+  let particleCap = PARTICLE_CAP.low;
+  const mqReduced = window.matchMedia ? matchMedia('(prefers-reduced-motion: reduce)') : null;
+  function motionOff() { return reducedMotion || !!(mqReduced && mqReduced.matches); }
 
   const creatures = [];      // {group, body, glow, baseY, phase}
   const obstacles = [];
@@ -168,13 +277,43 @@ export function createRenderer(container, opts) {
   // Particle pool (small tetra shards, bounded).
   const particles = [];
   const particleGeo = new THREE.TetrahedronGeometry(0.07);
-  for (let i = 0; i < TIER_PARTICLES.high; i++) {
+  for (let i = 0; i < PARTICLE_CAP.high; i++) {
     const m = new THREE.Mesh(particleGeo, new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9 }));
     m.visible = false;
     m.raycast = function () {}; // cosmetic: never intercept raycasts
     fxGroup.add(m);
     particles.push({ mesh: m, alive: false, vx: 0, vy: 0, vz: 0, life: 0, maxLife: 1 });
   }
+
+  // Ambient dust drifting through the lamp light (Ambient motion option).
+  const DUST = 90;
+  const dustPos = new Float32Array(DUST * 3);
+  const dustSeed = new Float32Array(DUST);
+  for (let i = 0; i < DUST; i++) {
+    dustSeed[i] = Math.random() * 1000;
+    dustPos[i * 3] = PAGE_CX + (Math.random() - 0.5) * 13;
+    dustPos[i * 3 + 1] = -1 + Math.random() * 9.5;
+    dustPos[i * 3 + 2] = 0.4 + Math.random() * 2.4;
+  }
+  const dustGeo = new THREE.BufferGeometry();
+  dustGeo.setAttribute('position', new THREE.BufferAttribute(dustPos, 3));
+  const dustMat = new THREE.PointsMaterial({ color: 0xfff2dd, size: 0.07, map: discTex, transparent: true, opacity: 0.55, depthWrite: false, blending: THREE.AdditiveBlending });
+  const dust = new THREE.Points(dustGeo, dustMat);
+  dust.raycast = function () {};
+  dust.visible = false;
+  fxGroup.add(dust);
+
+  // Image-based lighting (Reflections option), built on first use.
+  let envTex = null;
+  function environment() {
+    if (!envTex) {
+      const pm = new THREE.PMREMGenerator(renderer);
+      envTex = pm.fromScene(new RoomEnvironment(), 0.04).texture;
+      pm.dispose();
+    }
+    return envTex;
+  }
+  let woodTex = null;
 
   // Camera shake (camera only; pick plane truth unchanged).
   let shake = 0;
@@ -192,12 +331,14 @@ export function createRenderer(container, opts) {
     if (!hazardPools[type]) {
       hazardPools[type] = {
         free: [],
-        mat: new THREE.MeshStandardMaterial({
+        mat: new THREE.MeshPhysicalMaterial({
           color: color, roughness: 0.45,
           emissive: type === 'ember' ? color : 0x000000,
           emissiveIntensity: type === 'ember' ? 0.55 : 0
         })
       };
+      styleHazardMat(type, hazardPools[type].mat);
+      if (q.reflections === 'on') { hazardPools[type].mat.envMap = environment(); hazardPools[type].mat.envMapIntensity = type === 'drop' ? 0.45 : 0.4; }
     } else {
       hazardPools[type].mat.color.setHex(color);
       if (type === 'ember') hazardPools[type].mat.emissive.setHex(color);
@@ -210,7 +351,7 @@ export function createRenderer(container, opts) {
     let mesh = pool.free.pop();
     if (!mesh) {
       mesh = new THREE.Mesh(HAZARD_GEO[type] || HAZARD_GEO.drop, pool.mat);
-      mesh.castShadow = tier !== 'low';
+      mesh.castShadow = true;
       if (type === 'drop') mesh.scale.set(0.8, 1.25, 0.8);
       if (type === 'gale') mesh.scale.set(1, 1, 0.55);
     }
@@ -240,10 +381,13 @@ export function createRenderer(container, opts) {
       if (p.alive) continue;
       p.alive = true;
       p.life = 0;
-      p.maxLife = reducedMotion ? 0.25 : 0.55 + Math.random() * 0.35;
+      p.maxLife = motionOff() ? 0.25 : 0.55 + Math.random() * 0.35;
       p.mesh.visible = true;
       p.mesh.position.set(wx(x), wy(y), 0.25);
       p.mesh.material.color.setHex(colorHex);
+      // High particles: HDR-bright shards so bloom makes them sparkle.
+      p.mesh.material.toneMapped = q.particles !== 'high';
+      if (q.particles === 'high') p.mesh.material.color.multiplyScalar(1.8);
       p.mesh.material.opacity = 0.95;
       const a = Math.random() * Math.PI * 2;
       const sp = (spread || 2.4) * (0.4 + Math.random() * 0.8);
@@ -288,7 +432,7 @@ export function createRenderer(container, opts) {
     const segs = Math.min(480, Math.max(8, pts.length * 4));
     const geo = new THREE.TubeGeometry(curve, segs, radius, 8, false);
     const mesh = new THREE.Mesh(geo, material);
-    mesh.castShadow = tier !== 'low';
+    mesh.castShadow = true;
     return mesh;
   }
 
@@ -297,7 +441,7 @@ export function createRenderer(container, opts) {
     const mesh = buildStrokeMesh(pts, th, inkMat);
     gameGroup.add(mesh);
     strokeMeshes.push(mesh);
-    if (!reducedMotion) { mesh.userData.bornAt = performance.now(); mesh.scale.setScalar(0.01); }
+    if (!motionOff()) { mesh.userData.bornAt = performance.now(); mesh.scale.setScalar(0.01); }
     showGhost(null);
     showHint(null);
     return mesh;
@@ -377,7 +521,7 @@ export function createRenderer(container, opts) {
       const body = new THREE.Mesh(creatureGeo, creatureMat);
       const r = cr.r / S;
       body.scale.set(r, r * 0.82, r * 0.7);
-      body.castShadow = tier !== 'low';
+      body.castShadow = true;
       const eL = new THREE.Mesh(eyeGeo, eyeMat);
       const eR = new THREE.Mesh(eyeGeo, eyeMat);
       eL.position.set(-r * 0.34, r * 0.18, r * 0.62);
@@ -391,9 +535,15 @@ export function createRenderer(container, opts) {
       // glow sits on the page plane, relative to the holder
       glow.position.set(0, wy(Math.max(4, cr.y - cr.r - 6)) - wy(cr.y), FRAMING.PAGE_Z + 0.015 - holder.position.z);
       holder.add(glow);
+      const halo = new THREE.Mesh(haloGeo, haloMat); // soft lamp-lit aura (Surface detail)
+      halo.scale.setScalar(r * 5);
+      halo.position.set(0, 0, FRAMING.PAGE_Z + 0.02 - holder.position.z);
+      halo.raycast = function () {};
+      halo.visible = q.detail === 'detailed';
+      holder.add(halo);
       gameGroup.add(holder);
       creatures.push({
-        group: holder, body: g, glow: glow,
+        group: holder, body: g, glow: glow, halo: halo, haloBase: r * 5,
         baseY: wy(cr.y),
         phase: decorRng ? decorRng.next() * Math.PI * 2 : Math.random() * 6.28,
         flashUntil: 0
@@ -406,7 +556,7 @@ export function createRenderer(container, opts) {
       mesh.scale.set(len, (o.th || 16) / S, 1);
       mesh.position.set(wx((o.x1 + o.x2) / 2), wy((o.y1 + o.y2) / 2), FRAMING.PAGE_Z + 0.07);
       mesh.rotation.z = Math.atan2(o.y2 - o.y1, o.x2 - o.x1);
-      mesh.castShadow = tier !== 'low';
+      mesh.castShadow = true;
       mesh.receiveShadow = true;
       gameGroup.add(mesh);
       obstacles.push(mesh);
@@ -416,6 +566,7 @@ export function createRenderer(container, opts) {
       const noz = new THREE.Mesh(emitterGeo, emitterMat);
       noz.position.set(wx(em.x), wy(em.y), FRAMING.PAGE_Z + 0.1);
       noz.rotation.z = Math.atan2(em.dy, em.dx) - Math.PI / 2;
+      noz.castShadow = true;
       gameGroup.add(noz);
       emittersFx.push(noz);
     });
@@ -433,6 +584,8 @@ export function createRenderer(container, opts) {
     creatureMat.color.setHex(p.creature);
     creatureMat.emissive.setHex(p.creature);
     glowMat.color.setHex(p.accent);
+    haloMat.color.setHex(p.accent);
+    rim.color.setHex(p.creature).lerp(new THREE.Color(0xbcd4ff), 0.6);
     ghostMat.color.setHex(p.accent);
     hintMat.color.setHex(highContrast ? 0xd00000 : p.accent);
     key.color.setHex(p.light);
@@ -512,10 +665,10 @@ export function createRenderer(container, opts) {
       if (pb.onEvent) pb.onEvent(ev);
       if (ev.type === 'block' && ev.id != null) {
         const rec = activeHazards.get(ev.id);
-        if (rec) spawnParticles((rec.mesh.position.x) * S + 500, rec.mesh.position.y * S, 0xfff0c0, tier === 'low' ? 3 : 8, 2.2);
+        if (rec) spawnParticles((rec.mesh.position.x) * S + 500, rec.mesh.position.y * S, 0xfff0c0, q.particles === 'low' ? 3 : 8, 2.2);
       } else if (ev.type === 'hit') {
         flashHit(ev.creature || 0);
-        if (!reducedMotion) shake = Math.min(0.5, shake + 0.3);
+        if (!motionOff()) shake = Math.min(0.5, shake + 0.3);
       }
     }
   }
@@ -561,14 +714,14 @@ export function createRenderer(container, opts) {
     const c = creatures[creatureIndex || 0];
     if (!c) return;
     c.flashUntil = performance.now() + 450;
-    spawnParticles(500 + c.group.position.x * S, c.group.position.y * S, 0xe04a3a, tier === 'low' ? 4 : 14, 3);
+    spawnParticles(500 + c.group.position.x * S, c.group.position.y * S, 0xe04a3a, q.particles === 'low' ? 4 : 14, 3);
   }
 
   function celebrate() {
     creatures.forEach(function (c) {
-      spawnParticles(500 + c.group.position.x * S, c.group.position.y * S, 0xffd34d, tier === 'low' ? 5 : 18, 3.2);
+      spawnParticles(500 + c.group.position.x * S, c.group.position.y * S, 0xffd34d, q.particles === 'low' ? 5 : 18, 3.2);
     });
-    if (!reducedMotion) shake = Math.min(0.35, shake + 0.12);
+    if (!motionOff()) shake = Math.min(0.35, shake + 0.12);
   }
 
   // ---------- coordinate mapping ----------
@@ -594,28 +747,221 @@ export function createRenderer(container, opts) {
     return { x: rect.left + (_v3.x + 1) / 2 * rect.width, y: rect.top + (1 - _v3.y) / 2 * rect.height };
   }
 
-  // ---------- quality / motion / visibility ----------
-  function applyTier(t) {
-    tier = TIER_DPR[t] ? t : 'medium';
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, TIER_DPR[tier]));
-    const sh = TIER_SHADOW[tier];
-    renderer.shadowMap.enabled = sh > 0;
-    key.castShadow = sh > 0;
-    if (sh > 0) {
-      key.shadow.mapSize.set(sh, sh);
+  // ---------- graphics settings ----------
+  // Shadow frustum fitted to the page plus a small desk margin, so every
+  // shadow texel lands on the play area.
+  function fitShadow() {
+    key.target.position.set(PAGE_CX, PAGE_CY, 0);
+    _v3.set(4, 5.5, 7).normalize();
+    key.position.copy(key.target.position).addScaledVector(_v3, 14);
+    key.updateMatrixWorld(); key.target.updateMatrixWorld();
+    const cam = key.shadow.camera;
+    cam.position.copy(key.position);
+    cam.lookAt(key.target.position);
+    cam.updateMatrixWorld();
+    const inv = cam.matrixWorld.clone().invert();
+    let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+    const hw = pageW / 2 + 0.7;
+    for (let i = 0; i < 8; i++) {
+      _v3b.set(PAGE_CX + (i & 1 ? hw : -hw), (i & 2 ? pageH + 0.7 : -0.7), i & 4 ? 0.8 : -0.55).applyMatrix4(inv);
+      x0 = Math.min(x0, _v3b.x); x1 = Math.max(x1, _v3b.x);
+      y0 = Math.min(y0, _v3b.y); y1 = Math.max(y1, _v3b.y);
+      z0 = Math.min(z0, _v3b.z); z1 = Math.max(z1, _v3b.z);
+    }
+    cam.left = x0; cam.right = x1; cam.bottom = y0; cam.top = y1;
+    cam.near = Math.max(0.1, -z1 - 0.5); cam.far = -z0 + 0.5;
+    cam.updateProjectionMatrix();
+  }
+  fitShadow();
+
+  function styleHazardMat(type, m) {
+    const rich = q.detail === 'detailed';
+    m.roughness = type === 'drop' ? (rich ? 0.25 : 0.35) : type === 'pebble' ? 0.7 : type === 'gale' ? 0.3 : 0.45;
+    m.clearcoat = rich ? (type === 'drop' ? 0.6 : type === 'pebble' ? 0 : 0.4) : 0;
+    m.clearcoatRoughness = 0.15;
+    // Embers run HDR-bright when bloom is on so only they (and sparks) glow.
+    if (type === 'ember') m.emissiveIntensity = q.bloom === 'on' ? 1.7 : 0.55;
+  }
+
+  // Image-based lighting per material (scene.environment would force one
+  // intensity on everything; paper must stay matte so ink keeps its contrast).
+  const ENV_INTENSITY = [[deskMat, 0.3], [pageMat, 0.12], [pageEdgeMat, 0.2], [inkMat, 0.35], [creatureMat, 0.35],
+    [obstacleMat, 0.35], [emitterMat, 0.9]];
+  function applyReflections() {
+    const env = q.reflections === 'on' ? environment() : null;
+    const set = function (m, k) {
+      if (m.envMap !== env) { m.envMap = env; m.needsUpdate = true; }
+      m.envMapIntensity = k;
+    };
+    ENV_INTENSITY.forEach(function (e) { set(e[0], e[1]); });
+    Object.keys(hazardPools).forEach(function (t) { set(hazardPools[t].mat, t === 'drop' ? 0.45 : 0.4); });
+    hemi.intensity = env ? 0.7 : 0.85; // IBL takes over part of the fill
+  }
+
+  function applyDetail() {
+    const rich = q.detail === 'detailed';
+    if (rich && !woodTex) woodTex = woodTexture();
+    deskMat.map = rich ? woodTex : null;
+    deskMat.roughness = rich ? 0.72 : 0.95;
+    pageMat.bumpMap = rich && paperTex ? paperTex : null;
+    pageMat.bumpScale = 1.4;
+    inkMat.clearcoat = rich ? 0.35 : 0;
+    inkMat.clearcoatRoughness = 0.25;
+    inkMat.roughness = rich ? 0.4 : 0.55;
+    creatureMat.clearcoat = rich ? 0.5 : 0;
+    creatureMat.sheen = rich ? 0.35 : 0;
+    creatureMat.roughness = rich ? 0.42 : 0.5;
+    underSheets.visible = rich;
+    rim.intensity = rich ? 0.55 : 0;
+    creatures.forEach(function (c) { if (c.halo) c.halo.visible = rich; });
+    Object.keys(hazardPools).forEach(function (t) { styleHazardMat(t, hazardPools[t].mat); });
+    [deskMat, pageMat].forEach(function (m) { m.needsUpdate = true; });
+  }
+
+  let composer = null, postFailed = false, postKey = null, gradePass = null;
+  let adaptiveScale = 1, frameTimes = [], fps = 0, pixelRatio = 1, sizeW = 0, sizeH = 0;
+
+  /** Apply saved graphics settings ({preset, render_scale, adaptive, show_fps, <category>}). */
+  function setGraphics(saved) {
+    const json = JSON.stringify(saved || {});
+    if (json === gfxSaved) return;
+    gfxSaved = json;
+    const prevShadows = q.shadows;
+    q = resolve(saved || {}, detected);
+    const size = SHADOW_MAP[q.shadows];
+    renderer.shadowMap.enabled = size > 0;
+    key.castShadow = size > 0;
+    if (size > 0 && key.shadow.mapSize.x !== size) {
+      key.shadow.mapSize.set(size, size);
       if (key.shadow.map) { key.shadow.map.dispose(); key.shadow.map = null; }
     }
-    particleCap = TIER_PARTICLES[tier];
-    // trim alive particles over cap
+    if ((prevShadows === 'off') !== (q.shadows === 'off')) {
+      // Lit materials recompile with or without shadow sampling.
+      scene.traverse(function (o) {
+        if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach(function (m) { m.needsUpdate = true; });
+      });
+    }
+    applyReflections();
+    particleCap = PARTICLE_CAP[q.particles];
     let alive = aliveParticleCount();
     for (let i = 0; i < particles.length && alive > particleCap; i++) {
       if (particles[i].alive) { particles[i].alive = false; particles[i].mesh.visible = false; alive--; }
     }
-    resize();
+    applyDetail();
+    applyMotion();
+    adaptiveScale = 1;
+    frameTimes.length = 0;
+    postKey = null; // rebuild the post chain on the next frame
+    renderer.domElement.dataset.gfxPreset = q.preset;
+    document.body.dataset.gfxPreset = q.preset;
+    fpsVisible(q.showFps);
   }
 
-  function setQuality(t) { applyTier(t === 'auto' ? pickAutoTier() : t); }
-  function setReducedMotion(b) { reducedMotion = !!b; }
+  function applyMotion() {
+    dust.visible = q.background === 'animated' && !motionOff();
+  }
+
+  function fpsVisible(on) {
+    let el = document.getElementById('gs-fps');
+    if (on && !el) {
+      el = document.createElement('div');
+      el.id = 'gs-fps';
+      el.className = 'gs-fps';
+      el.setAttribute('aria-hidden', 'true');
+      document.body.appendChild(el);
+    }
+    if (el) el.hidden = !on;
+  }
+
+  /** What the Graphics panel shows: GPU, auto choice, resolved tiers, cost and frame rate. */
+  function graphicsInfo() {
+    const px = [Math.round(sizeW * pixelRatio), Math.round(sizeH * pixelRatio)];
+    return {
+      gpu: gpu, detected: detected, resolved: q, pixels: px,
+      summary: describe(q, px), fps: Math.round(fps),
+      adaptiveScale: Math.round(adaptiveScale * 100) / 100, postFailed: postFailed
+    };
+  }
+
+  function buildPost(w, h) {
+    if (composer) {
+      composer.passes.forEach(function (ps) { if (ps.dispose) ps.dispose(); });
+      composer.dispose();
+    }
+    composer = null; gradePass = null;
+    if (!q.post || postFailed) return;
+    try {
+      const pw = Math.max(1, Math.round(w * pixelRatio)), ph = Math.max(1, Math.round(h * pixelRatio));
+      const target = new THREE.WebGLRenderTarget(pw, ph, { type: THREE.HalfFloatType, samples: q.antialias === 'msaa' ? 4 : 0 });
+      const c = new EffectComposer(renderer, target);
+      c.setPixelRatio(pixelRatio);
+      c.setSize(w, h);
+      c.addPass(new RenderPass(scene, camera));
+      if (q.ao !== 'off') {
+        const hi = q.ao === 'high';
+        const ao = new GTAOPass(scene, camera, pw, ph);
+        ao.output = GTAOPass.OUTPUT.Default;
+        ao.blendIntensity = hi ? 0.85 : 0.7;
+        ao.updateGtaoMaterial({ radius: 0.35, distanceExponent: 1.4, thickness: 0.6, scale: 1.0, samples: hi ? 16 : 8 });
+        ao.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: hi ? 6 : 4, rings: 2, samples: hi ? 16 : 8 });
+        c.addPass(ao);
+      }
+      if (q.bloom === 'on') {
+        // High threshold: only embers, sparks and glints bloom; paper stays crisp.
+        c.addPass(new UnrealBloomPass(new THREE.Vector2(w, h), 0.55, 0.45, 0.9));
+      }
+      c.addPass(new OutputPass());
+      if (q.grade === 'on') { gradePass = new ShaderPass(GradeShader); c.addPass(gradePass); }
+      if (q.antialias === 'smaa') c.addPass(new SMAAPass(pw, ph));
+      if (q.antialias === 'fxaa') {
+        const fxaa = new ShaderPass(FXAAShader);
+        fxaa.material.uniforms.resolution.value.set(1 / pw, 1 / ph);
+        c.addPass(fxaa);
+      }
+      composer = c;
+    } catch (e) {
+      // Post-processing is an enhancement: render directly if the chain cannot be built.
+      postFailed = true;
+      composer = null;
+    }
+  }
+
+  // Adaptive resolution: ~90-frame average; step down when slow, back up when fast.
+  function adapt(dtMs) {
+    frameTimes.push(dtMs);
+    if (frameTimes.length < 90) return;
+    let sum = 0;
+    for (let i = 0; i < frameTimes.length; i++) sum += frameTimes[i];
+    const avg = sum / frameTimes.length;
+    frameTimes.length = 0;
+    fps = 1000 / avg;
+    const el = document.getElementById('gs-fps');
+    if (el && !el.hidden) el.textContent = Math.round(fps) + ' fps · ' + (Math.round(pixelRatio * 100) / 100) + '×';
+    if (!q.adaptive) return;
+    if (avg > 26) adaptiveScale = Math.max(0.6, adaptiveScale - 0.1);
+    else if (avg < 14 && adaptiveScale < 1) adaptiveScale = Math.min(1, adaptiveScale + 0.05);
+  }
+
+  function applySize() {
+    const w = container.clientWidth || 1, h = container.clientHeight || 1;
+    const ratio = Math.min(window.devicePixelRatio || 1, q.dprCap) * q.scale * adaptiveScale;
+    if (w !== sizeW || h !== sizeH || ratio !== pixelRatio) {
+      sizeW = w; sizeH = h; pixelRatio = ratio;
+      renderer.setPixelRatio(ratio);
+      renderer.setSize(w, h, false);
+    }
+    const k = q.post && !postFailed ? [q.ao, q.bloom, q.grade, q.antialias, w, h, ratio].join('|') : 'none';
+    if (k !== postKey) { postKey = k; buildPost(w, h); }
+  }
+
+  function draw() {
+    applySize();
+    if (composer) composer.render();
+    else renderer.render(scene, camera);
+  }
+
+  function setReducedMotion(b) { reducedMotion = !!b; applyMotion(); }
+  if (mqReduced && mqReduced.addEventListener) mqReduced.addEventListener('change', applyMotion);
   function setVisible(v) {
     visible = !!v;
     if (visible && !disposed) renderer.domElement && requestAnimationFrame(loop);
@@ -630,7 +976,7 @@ export function createRenderer(container, opts) {
 
   function resize() {
     const w = container.clientWidth || 1, h = container.clientHeight || 1;
-    renderer.setSize(w, h, false);
+    applySize();
     camera.aspect = w / h;
     const halfTan = Math.tan(THREE.MathUtils.degToRad(FRAMING.FOV / 2));
     // Fit the page into the top (1 - insetBottomFrac) of the viewport, then
@@ -663,7 +1009,10 @@ export function createRenderer(container, opts) {
   }
   function onRestored() {
     // Rebuild minimal GPU state: re-apply quality + theme; geometries persist.
-    applyTier(tier);
+    const g = gfxSaved ? JSON.parse(gfxSaved) : {};
+    gfxSaved = null; postKey = null; postFailed = false;
+    envTex = null; // the PMREM render target died with the context
+    setGraphics(g);
     if (palette) setTheme(palette, { highContrast: highContrast });
   }
   renderer.domElement.addEventListener('webglcontextlost', onLost, false);
@@ -674,14 +1023,20 @@ export function createRenderer(container, opts) {
   function loop(nowMs) {
     if (disposed || !visible) return;
     requestAnimationFrame(loop);
-    const dt = Math.min(0.05, (nowMs - lastMs) / 1000);
+    const rawDt = (nowMs - lastMs) / 1000;
+    const dt = Math.min(0.05, rawDt);
     lastMs = nowMs;
 
     // creature idle bob (deterministic phase), hit flash tint
     for (let i = 0; i < creatures.length; i++) {
       const c = creatures[i];
-      const bob = reducedMotion ? 0 : Math.sin(nowMs / 600 + c.phase) * 0.035;
+      const still = motionOff();
+      const bob = still ? 0 : Math.sin(nowMs / 600 + c.phase) * 0.035;
       c.group.position.y = c.baseY + bob;
+      if (c.halo && c.halo.visible) {
+        const pulse = still || q.background !== 'animated' ? 1 : 1 + Math.sin(nowMs / 900 + c.phase) * 0.06;
+        c.halo.scale.setScalar(c.haloBase * pulse);
+      }
       const flashing = nowMs < c.flashUntil;
       c.body.children.forEach(function (m) {
         if (m.material === creatureMat) m.material.emissiveIntensity = flashing ? 0.8 : 0.12;
@@ -713,13 +1068,25 @@ export function createRenderer(container, opts) {
 
     // hazard spin (cosmetic)
     activeHazards.forEach(function (rec) {
-      if (!reducedMotion) rec.mesh.rotation.z += dt * 2.4;
+      if (!motionOff()) rec.mesh.rotation.z += dt * 2.4;
     });
+
+    // ambient dust: slow rise with a lazy sideways sway, wrapping at the top
+    if (dust.visible) {
+      const t = nowMs / 1000;
+      for (let i = 0; i < DUST; i++) {
+        let y = dustPos[i * 3 + 1] + dt * 0.12;
+        if (y > 8.5) y = -1;
+        dustPos[i * 3 + 1] = y;
+        dustPos[i * 3] += Math.sin(t * 0.4 + dustSeed[i]) * dt * 0.08;
+      }
+      dustGeo.attributes.position.needsUpdate = true;
+    }
 
     updateParticles(dt);
 
     // camera shake (decaying, camera only)
-    if (shake > 0.001 && !reducedMotion) {
+    if (shake > 0.001 && !motionOff()) {
       shakeSeed.x = (Math.random() - 0.5) * shake * 0.12;
       shakeSeed.y = (Math.random() - 0.5) * shake * 0.12;
       shake *= Math.pow(0.02, dt); // fast decay
@@ -731,7 +1098,8 @@ export function createRenderer(container, opts) {
       camera.position.y = baseCamY;
     }
 
-    renderer.render(scene, camera);
+    adapt(Math.min(250, rawDt * 1000));
+    draw();
   }
 
   // ---------- dispose ----------
@@ -745,16 +1113,18 @@ export function createRenderer(container, opts) {
         (Array.isArray(o.material) ? o.material : [o.material]).forEach(function (m) { m.dispose(); });
       }
     });
+    if (composer) composer.dispose();
+    if (envTex) envTex.dispose();
     renderer.dispose();
     if (renderer.domElement.parentNode) renderer.domElement.parentNode.removeChild(renderer.domElement);
   }
 
   // boot
-  setQuality('medium');
+  setGraphics({});
   resize();
   // prewarm: compile shaders and render once before first real frame
   renderer.compile(scene, camera);
-  renderer.render(scene, camera);
+  draw();
   requestAnimationFrame(loop);
 
   return {
@@ -779,13 +1149,14 @@ export function createRenderer(container, opts) {
     screenToWorld: screenToWorld,
     worldToScreen: worldToScreen,
     setReducedMotion: setReducedMotion,
-    setQuality: setQuality,
+    setGraphics: setGraphics,
+    graphicsInfo: graphicsInfo,
     resize: resize,
     setViewportInsets: setViewportInsets,
     setVisible: setVisible,
     flashHit: flashHit,
     celebrate: celebrate,
-    shakeSmall: function () { if (!reducedMotion) shake = Math.min(0.3, shake + 0.08); },
+    shakeSmall: function () { if (!motionOff()) shake = Math.min(0.3, shake + 0.08); },
     dispose: dispose
   };
 }

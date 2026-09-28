@@ -981,7 +981,7 @@ function applySettings(next) {
   GSAudio.applySettings(settings);
   GSAudio.setCaptions(settings.captions, function (text) { ui.caption(text); });
   if (renderer) {
-    renderer.setQuality(settings.graphicsTier);
+    renderer.setGraphics(settings.graphics);
     renderer.setReducedMotion(settings.reducedMotion);
     if (themeChanged || session) {
       const pal = session ? themeForLevel(session.cfg).palette
@@ -998,6 +998,7 @@ function openSettings() {
   ui.showSettings({
     settings: settings,
     themes: unlockedThemes(),
+    graphicsInfo: renderer ? renderer.graphicsInfo : null,
     onChange: applySettings,
     onResetSave: function () {
       try { localStorage.removeItem(REPLAY_KEY); } catch (e) {}
@@ -1107,7 +1108,7 @@ async function boot() {
       }
     });
     if (renderer) {
-      renderer.setQuality(settings.graphicsTier);
+      renderer.setGraphics(settings.graphics);
       renderer.setReducedMotion(settings.reducedMotion);
       const theme = GSContent.THEMES.find(function (t) { return t.id === settings.theme; }) || GSContent.THEMES[0];
       renderer.setTheme(theme.palette, { highContrast: settings.highContrast });

@@ -119,7 +119,9 @@ async function runPass(browser, name, contextOpts) {
   const page = await context.newPage();
   const errors = [];
   page.on('pageerror', (e) => { const t = `pageerror: ${e.message}`; if (!browserNoise.test(t)) errors.push(t); });
-  page.on('console', (m) => { if (m.type() === 'error' && !browserNoise.test(m.text())) errors.push(`console: ${m.text()}`); });
+  page.on('console', (m) => {
+    if ((m.type() === 'error' || m.type() === 'warning') && !browserNoise.test(m.text())) errors.push(`console ${m.type()}: ${m.text()}`);
+  });
 
   const step = async (label, fn) => { await fn(); console.log(`ok - [${name}] ${label}`); };
 
@@ -241,6 +243,50 @@ async function runPass(browser, name, contextOpts) {
       await page.screenshot({ path: SHOT('settings', name) });
       await page.getByRole('button', { name: 'Done' }).click();
       await page.waitForSelector('.gs-title .gs-logo', { timeout: 5000 });
+    });
+
+    await step('settings → Graphics: presets, override, persistence across reload', async () => {
+      const preset = () => page.evaluate(() => document.body.dataset.gfxPreset);
+      const savedGfx = () => page.evaluate(() => {
+        const raw = localStorage.getItem('guardiansketch.save.v1');
+        return raw ? JSON.parse(JSON.parse(raw).payload).settings.graphics : null;
+      });
+      await page.getByRole('button', { name: 'Settings' }).click();
+      await page.waitForSelector('#gfx-preset');
+      if (await preset() !== 'low') throw new Error('software GPU should resolve Auto to low, got ' + await preset());
+      const autoLabel = await page.locator('#gfx-preset option[value=auto]').textContent();
+      if (!/Low/.test(autoLabel)) throw new Error('Auto label lacks detected tier: ' + autoLabel);
+      await page.getByLabel('Quality').selectOption('high');
+      await page.waitForFunction(() => document.body.dataset.gfxPreset === 'high', null, { timeout: 15000 });
+      await page.waitForFunction(() => /2048² shadows/.test(document.getElementById('gfx-summary')?.textContent || ''), null, { timeout: 15000 });
+      if (!/From preset \(On\)/.test(await page.locator('#gfx-bloom option[value=preset]').textContent())) throw new Error('bloom preset label wrong');
+      await page.locator('#gfx-bloom').selectOption('off');
+      await page.waitForFunction(() => !/bloom/.test(document.getElementById('gfx-summary')?.textContent || ''), null, { timeout: 15000 });
+      let g = await savedGfx();
+      if (!g || g.preset !== 'high' || g.bloom !== 'off') throw new Error('graphics not persisted: ' + JSON.stringify(g));
+      await page.locator('#gfx-show-fps').check();
+      await page.waitForSelector('#gs-fps', { state: 'attached', timeout: 15000 });
+      await page.locator('#gfx-controls').scrollIntoViewIfNeeded();
+      await page.screenshot({ path: SHOT('graphics', name) });
+      await page.getByRole('button', { name: 'Done' }).click();
+      await page.reload({ waitUntil: 'networkidle' });
+      await page.waitForSelector('.gs-title .gs-logo', { timeout: 15000 });
+      await page.waitForFunction(() => document.body.dataset.gfxPreset === 'high', null, { timeout: 15000 });
+      await page.getByRole('button', { name: 'Settings' }).click();
+      await page.waitForSelector('#gfx-preset');
+      if (await page.locator('#gfx-bloom').inputValue() !== 'off') throw new Error('bloom override lost on reload');
+      if (await page.locator('#gfx-preset').inputValue() !== 'high') throw new Error('preset lost on reload');
+      await page.locator('#gfx-preset').selectOption('ultra');
+      await page.waitForFunction(() => document.body.dataset.gfxPreset === 'ultra', null, { timeout: 15000 });
+      if (await page.locator('#gfx-bloom').inputValue() !== 'preset') throw new Error('choosing a preset did not clear overrides');
+      await page.waitForTimeout(1200); // render a few Ultra frames (console must stay clean)
+      await page.locator('#gfx-preset').selectOption('auto');
+      await page.waitForFunction(() => document.body.dataset.gfxPreset === 'low', null, { timeout: 15000 });
+      await page.locator('#gfx-show-fps').uncheck();
+      g = await savedGfx();
+      if (!g || g.preset !== 'auto' || g.bloom || g.show_fps) throw new Error('auto preset not persisted cleanly: ' + JSON.stringify(g));
+      await page.getByRole('button', { name: 'Done' }).click();
+      await page.waitForSelector('.gs-title .gs-logo', { timeout: 15000 });
     });
 
     await step('help open → close', async () => {

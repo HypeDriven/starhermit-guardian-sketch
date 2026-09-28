@@ -4,6 +4,9 @@
  * toasts, captions, live regions. UI never touches rules truth.
  */
 
+import { PRESETS, CATEGORIES as GFX_CATEGORIES, presetTier, resolve as resolveGfx, choosePreset, clampScale } from './gfx.js';
+import { gfxStrings, fmt } from './gfx-i18n.js';
+
 function el(tag, cls, text) {
   const n = document.createElement(tag);
   if (cls) n.className = cls;
@@ -386,6 +389,128 @@ export function createUI(root, handlers) {
     return row;
   }
 
+  // Graphics quality: preset, render scale, per-category overrides, adaptive
+  // resolution, frame-rate readout and a live cost summary (strings localized).
+  function graphicsControls(s, emit, infoFn) {
+    const T = gfxStrings();
+    const box = el('div', 'gs-gfx');
+    box.id = 'gfx-controls';
+    let timer = null;
+    const info = function () { try { return infoFn ? infoFn() : null; } catch (e) { return null; } };
+    const tierName = function (t) { return T.tier[t] || t; };
+
+    function idRow(id, label, control) {
+      const row = el('div', 'gs-setrow');
+      const lab = el('label', null, label);
+      lab.htmlFor = id;
+      control.id = id;
+      row.append(lab, control);
+      return row;
+    }
+    function select(options, value, onChange) {
+      const sel = el('select', 'gs-select');
+      options.forEach(function (o) {
+        const opt = el('option', null, o.label);
+        opt.value = o.value;
+        if (o.value === value) opt.selected = true;
+        sel.appendChild(opt);
+      });
+      sel.addEventListener('change', function () { onChange(sel.value); });
+      return sel;
+    }
+    function set(next, keepFocusId) {
+      s.graphics = next;
+      emit();
+      build(keepFocusId);
+    }
+
+    function build(focusId) {
+      box.textContent = '';
+      const g = s.graphics || {};
+      const inf = info();
+      const detected = inf ? inf.detected : 'balanced';
+      const resolved = resolveGfx(g, detected);
+
+      const presetSel = select([{ value: 'auto', label: fmt(T.auto, { tier: tierName(detected) }) }]
+        .concat(PRESETS.map(function (p) { return { value: p, label: tierName(p) }; })),
+      PRESETS.indexOf(g.preset) >= 0 ? g.preset : 'auto',
+      function (v) { set(choosePreset(s.graphics, v), 'gfx-preset'); });
+      box.appendChild(idRow('gfx-preset', T.quality, presetSel));
+
+      const range = el('input');
+      range.type = 'range'; range.min = '50'; range.max = '200'; range.step = '5';
+      range.value = String(Math.round(clampScale(g.render_scale) * 100));
+      const rowS = idRow('gfx-render-scale', T.renderScale, range);
+      rowS.classList.add('gs-slider');
+      const out = el('output', 'gs-gfx-value', range.value + '%');
+      out.htmlFor = 'gfx-render-scale';
+      const wrap = el('span', 'gs-gfx-range');
+      rowS.replaceChild(wrap, range);
+      wrap.append(range, out);
+      range.addEventListener('input', function () { out.textContent = range.value + '%'; });
+      range.addEventListener('change', function () {
+        set(Object.assign({}, s.graphics, { render_scale: parseInt(range.value, 10) / 100 }), 'gfx-render-scale');
+      });
+      box.appendChild(rowS);
+
+      Object.keys(GFX_CATEGORIES).forEach(function (cat) {
+        const cur = GFX_CATEGORIES[cat].indexOf(g[cat]) >= 0 ? g[cat] : 'preset';
+        const sel = select([{ value: 'preset', label: fmt(T.fromPreset, { tier: tierName(presetTier(resolved.preset, cat)) }) }]
+          .concat(GFX_CATEGORIES[cat].map(function (t) { return { value: t, label: tierName(t) }; })), cur,
+        function (v) {
+          const next = Object.assign({}, s.graphics);
+          if (v === 'preset') delete next[cat]; else next[cat] = v;
+          set(next, 'gfx-' + cat);
+        });
+        sel.dataset.gfxCategory = cat;
+        box.appendChild(idRow('gfx-' + cat, T.cat[cat], sel));
+      });
+
+      const toggle = function (id, label, checked, onChange) {
+        const cb = el('input');
+        cb.type = 'checkbox';
+        cb.checked = checked;
+        cb.addEventListener('change', function () { onChange(cb.checked); });
+        box.appendChild(idRow(id, label, cb));
+      };
+      toggle('gfx-adaptive', T.adaptive, g.adaptive !== false, function (v) {
+        const next = Object.assign({}, s.graphics);
+        if (v) delete next.adaptive; else next.adaptive = false;
+        set(next, 'gfx-adaptive');
+      });
+      toggle('gfx-show-fps', T.showFps, !!g.show_fps, function (v) {
+        const next = Object.assign({}, s.graphics);
+        if (v) next.show_fps = true; else delete next.show_fps;
+        set(next, 'gfx-show-fps');
+      });
+
+      const summary = el('p', 'gs-note gs-gfx-summary');
+      summary.id = 'gfx-summary';
+      summary.setAttribute('aria-live', 'polite');
+      box.appendChild(summary);
+      const note = el('p', 'gs-note gs-gfx-warn', T.postFailed);
+      note.id = 'gfx-post-note';
+      box.appendChild(note);
+      refresh();
+      if (focusId) { const f = box.querySelector('#' + focusId); if (f) f.focus(); }
+    }
+
+    function refresh() {
+      if (!box.isConnected && timer) { clearInterval(timer); timer = null; return; }
+      const inf = info();
+      const summary = box.querySelector('#gfx-summary');
+      const note = box.querySelector('#gfx-post-note');
+      if (summary) {
+        summary.textContent = inf ? [inf.gpu || T.unknownGpu, inf.summary].join(' · ') : '';
+        summary.dataset.gfxPreset = inf ? inf.resolved.preset : '';
+      }
+      if (note) note.hidden = !(inf && inf.postFailed);
+    }
+    build();
+    timer = setInterval(refresh, 1000);
+    return box;
+  }
+
   function showSettings(data) {
     // data: {settings, themes:[{id,name,locked}], onChange(settings), onResetSave()}
     const s = Object.assign({}, data.settings);
@@ -403,13 +528,10 @@ export function createUI(root, handlers) {
 
     const gfxSec = el('section', 'gs-setsec');
     gfxSec.appendChild(el('h3', null, 'Graphics'));
-    gfxSec.appendChild(selectRow('Quality tier', s.graphicsTier, [
-      { value: 'auto', label: 'Auto' }, { value: 'low', label: 'Low' },
-      { value: 'medium', label: 'Medium' }, { value: 'high', label: 'High' }
-    ], function (v) { s.graphicsTier = v; emit(); }));
     gfxSec.appendChild(selectRow('Theme', s.theme, data.themes.map(function (t) {
       return { value: t.id, label: t.name + (t.locked ? ' 🔒' : ''), disabled: t.locked };
     }), function (v) { s.theme = v; emit(); }));
+    gfxSec.appendChild(graphicsControls(s, emit, data.graphicsInfo));
     p.appendChild(gfxSec);
 
     const a11y = el('section', 'gs-setsec');
