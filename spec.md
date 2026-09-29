@@ -297,3 +297,7 @@ QA bar (checkable): every feature reachable by clicks/taps; no console errors or
 - Idempotent achievement delivery through the platform (achievements are local today; `server.js` is not a Jint game script, so there is no script-owned unlock path).
 - A high-visibility hazard palette bound to the existing setting.
 - Cancel-without-commit for gamepad B and pointer cancel parity.
+
+## Browser interference
+
+`browser-guard.js` (loaded from `index.html`) suppresses browser UI that gets in the way of play: the right-click context menu, the iOS long-press callout, copy / cut / paste, and page text selection. Text fields (inputs, textareas, selects, contenteditable) keep normal selection, context menu and clipboard behaviour.
