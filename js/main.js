@@ -4,6 +4,7 @@
  */
 import { createRenderer } from './render.js';
 import { createUI } from './ui.js';
+import { platformStrings } from './platform-i18n.js';
 
 /* global GSRNG, GSRules, GSContent, GSStore, GSAudio, GSPlatform */
 
@@ -11,20 +12,29 @@ import { createUI } from './ui.js';
 const REPLAY_KEY = 'guardiansketch.lastreplay';
 const TELEMETRY_KEY = 'guardiansketch.telemetry';
 const PLAYER_KEY = 'guardiansketch.playername';
-const BINDINGS = {
-  'Arrow keys': 'Move the pen',
-  'Shift + Arrow keys': 'Move the pen faster',
-  'Space': 'Pen down / pen up (draw)',
-  'R': 'Release the storm',
-  'U': 'Undo last stroke',
-  'H': 'Hint',
-  'S': 'Skip storm playback',
-  'P or Escape': 'Pause / resume',
-  'Enter': 'Confirm default button',
-  'C': 'Reset camera framing',
-  'Gamepad dpad/stick': 'Move the pen',
-  'Gamepad A / B / Start': 'Draw or confirm / cancel / pause'
-};
+// Help table from the effective key bindings (platform overrides when signed in).
+function keyName(code) {
+  return ({ ArrowLeft: '←', ArrowRight: '→', ArrowUp: '↑', ArrowDown: '↓', Escape: 'Escape', Space: 'Space',
+    ShiftLeft: 'Shift', ShiftRight: 'Shift' })[code] || String(code).replace(/^(Key|Digit|Numpad)/, '');
+}
+function bindingsHelp() {
+  const k = platform.keyMap();
+  const names = function (a) { return Array.from(new Set(k[a].map(keyName))).join(' or '); };
+  const out = {};
+  out[['penLeft', 'penRight', 'penUp', 'penDown'].map(names).join(' ')] = 'Move the pen';
+  out[names('penFast') + ' + move'] = 'Move the pen faster';
+  out[names('penToggle')] = 'Pen down / pen up (draw)';
+  out[names('release')] = 'Release the storm';
+  out[names('undo')] = 'Undo last stroke';
+  out[names('hint')] = 'Hint';
+  out[names('skip')] = 'Skip storm playback';
+  out[names('pause')] = 'Pause / resume';
+  out['Enter'] = 'Confirm default button';
+  out[names('camera')] = 'Reset camera framing';
+  out['Gamepad dpad/stick'] = 'Move the pen';
+  out['Gamepad A / B / Start'] = 'Draw or confirm / cancel / pause';
+  return out;
+}
 const PEN_STEP = 14, PEN_STEP_FAST = 42;
 
 const $ = function (sel) { return document.querySelector(sel); };
@@ -39,8 +49,8 @@ function transition(to, reason) {
 }
 
 // ---------- telemetry (anonymous funnel only) ----------
-// The host guarantees only GET /api/v1/time; every other /api/v1/* route may
-// not exist once deployed, so telemetry stays local and never issues a request.
+// No per-game telemetry route exists on the platform: telemetry stays local
+// and never issues a request.
 const sessionId = 's-' + Math.random().toString(36).slice(2, 10);
 function telemetry(event) {
   try {
@@ -58,12 +68,17 @@ let progress = doc.progress;
 function persist() {
   GSStore.save({ v: doc.v, settings: settings, progress: progress });
   platform.scheduleCloudSave({ v: doc.v, settings: settings, progress: progress });
+  platform.syncSettings(settings);
 }
 
 // ---------- platform glue (launch token, profile, cloud save, boards) ----------
 // Hosted mode activates iff a #game_token= fragment token (or a local-dev
 // query fallback) was read; the token is used in-memory only, never persisted.
-const platform = GSPlatform.createPlatform({ onSyncStatus: function () { updateSyncLine(); } });
+const platform = GSPlatform.createPlatform({
+  onSyncStatus: function () { updateSyncLine(); },
+  // Renewal refused: keep playing on the local save; the title re-offers sign-in.
+  onSignedOut: function () { updateSyncLine(); if (ui) ui.toast(platformStrings().signedOut); if (appState === 'title') toTitle(); }
+});
 let syncLineText = 'Offline — progress is saved on this device';
 function updateSyncLine() {
   if (platform.hosted()) {
@@ -91,24 +106,9 @@ const canvasWrap = document.createElement('div');
 canvasWrap.className = 'gs-canvas-wrap';
 rootEl.appendChild(canvasWrap);
 
-// ---------- server time ----------
-// /api/v1/time is probed once at startup for the daily boundary; the same
-// origin also serves the platform contract when a launch token is present
-// (profile, cloud save, read-only boards) and the game's own server.js
-// endpoints when it is the host. Every call fails soft to local behaviour.
-let serverOffset = null; // serverNow - localNow
-let serverNowMs = function () { return serverOffset != null ? Date.now() + serverOffset : Date.now(); };
-
-async function fetchServerTime() {
-  try {
-    const t0 = Date.now();
-    const r = await fetch('/api/v1/time');
-    const t1 = Date.now();
-    if (!r.ok) return;
-    const j = await r.json();
-    if (typeof j.now === 'number') serverOffset = j.now - Math.round((t0 + t1) / 2);
-  } catch (e) { /* offline: local time */ }
-}
+// ---------- clock ----------
+// Daily boundaries use the local UTC clock (no time request is made).
+const serverNowMs = function () { return Date.now(); };
 function todayStr() { return GSContent.utcDateString(serverNowMs()); }
 
 // ---------- ui handlers forward-declared ----------
@@ -168,7 +168,7 @@ function beginLevel(cfg, opts) {
     mode: meta.mode, cfg: state.cfg, state: state,
     commands: [], stateHashes: [GSRules.hashState(state)],
     invalid: 0, startPerf: performance.now(),
-    startedOffsetMs: serverOffset != null ? Math.round(serverOffset) : 0,
+    startedOffsetMs: 0,
     ranked: meta.ranked, board: meta.board,
     lesson: opts.lesson || null, lessonIdx: opts.lessonIdx != null ? opts.lessonIdx : null,
     drawing: false
@@ -546,11 +546,7 @@ async function submitScore(envelope, done) {
     else finishLocal();
     return;
   }
-  // The game's own server.js validates the envelope by replay; when it is
-  // not the host (or is unreachable) scores stay on-device.
-  const res = await platform.submitEnvelope(board, envelope, playerName(), sessionId);
-  if (res && res.entries) done(res.entries.slice(0, 10), 'validated');
-  else finishLocal();
+  finishLocal();
 }
 
 // ---------- input: pointer drawing ----------
@@ -677,39 +673,41 @@ function penToggle() {
 window.addEventListener('keydown', function (ev) {
   startAudioOnce();
   if (ev.target && (ev.target.tagName === 'INPUT' || ev.target.tagName === 'SELECT' || ev.target.tagName === 'TEXTAREA')) return;
-  keysDown[ev.key] = true;
-  const k = ev.key;
-  if (k === ' ') { ev.preventDefault(); if (!ev.repeat && appState === 'active' && !ui.isModalOpen()) penToggle(); return; }
-  if (k === 'Enter') return; // native button activation
+  if (ev.key === 'Enter') return; // native button activation
+  const k = platform.actionForCode(ev.code);
+  if (!k) return;
+  keysDown[k] = true;
+  if (k === 'penToggle') { ev.preventDefault(); if (!ev.repeat && appState === 'active' && !ui.isModalOpen()) penToggle(); return; }
   // Pause/resume must work while the (non-dismissable) pause panel is open:
   // handle it before the generic modal gate. The UI's own Escape handler
   // closes dismissable modals and stops propagation, so this only sees
   // Escape when the pause panel (or nothing) is on top.
-  if (k === 'p' || k === 'P' || k === 'Escape') {
+  if (k === 'pause') {
     if ((appState === 'active' || appState === 'resolving') && !ui.isModalOpen()) pauseGame('key');
     else if (appState === 'paused' && ui.isPauseOpen()) resumeGame();
     return;
   }
   if (ui.isModalOpen()) return;
-  if (k === 'r' || k === 'R') { if (appState === 'active') doRelease(); }
-  else if (k === 'u' || k === 'U') { if (appState === 'active') undoStroke(); }
-  else if (k === 'h' || k === 'H') { if (appState === 'active') showHintNow(); }
-  else if (k === 's' || k === 'S') { if (appState === 'resolving') skipPlayback(); }
-  else if (k === 'c' || k === 'C') { if (renderer) renderer.resize(); }
+  if (k === 'release') { if (appState === 'active') doRelease(); }
+  else if (k === 'undo') { if (appState === 'active') undoStroke(); }
+  else if (k === 'hint') { if (appState === 'active') showHintNow(); }
+  else if (k === 'skip') { if (appState === 'resolving') skipPlayback(); }
+  else if (k === 'camera') { if (renderer) renderer.resize(); }
 });
-window.addEventListener('keyup', function (ev) { keysDown[ev.key] = false; });
+window.addEventListener('keyup', function (ev) { const k = platform.actionForCode(ev.code); if (k) keysDown[k] = false; });
+window.addEventListener('blur', function () { for (const k in keysDown) keysDown[k] = false; });
 
 // held-arrow pen movement + gamepad polling, driven by rAF
 let padPrev = {};
 function inputTick() {
   if (session && appState === 'active' && !ui.isModalOpen()) {
-    const fast = keysDown['Shift'];
+    const fast = keysDown['penFast'];
     const step = fast ? PEN_STEP_FAST : PEN_STEP;
     let dx = 0, dy = 0;
-    if (keysDown['ArrowLeft']) dx -= step;
-    if (keysDown['ArrowRight']) dx += step;
-    if (keysDown['ArrowUp']) dy += step;   // world is y-up
-    if (keysDown['ArrowDown']) dy -= step;
+    if (keysDown['penLeft']) dx -= step;
+    if (keysDown['penRight']) dx += step;
+    if (keysDown['penUp']) dy += step;   // world is y-up
+    if (keysDown['penDown']) dy -= step;
     // gamepad
     const pads = navigator.getGamepads ? navigator.getGamepads() : [];
     const gp = pads && pads[0];
@@ -864,6 +862,8 @@ function toTitle() {
     dailyDone: dailyDone != null ? dailyDone : null,
     nextDailyText: nextDailyText(),
     syncText: syncLineText,
+    canSignIn: platform.canSignIn(),
+    signedIn: platform.hosted(),
     compatWarning: glOk ? null : 'WebGL is unavailable — menus work, but the 3D page cannot be shown.'
   });
   updateMirror(null);
@@ -1040,13 +1040,8 @@ function openScores() {
       else render(GSStore.sortEntries(localEntries(board)), 'No scores on this device for this board yet.');
     });
   } else {
-    // Global tab against the game's own server.js when it is the host.
-    const board = scoresBoard;
-    platform.ownBoardEntries(board, sessionId).then(function (res) {
-      if (board !== scoresBoard) return;
-      if (res && res.entries) render(res.entries, 'No entries on the server for this board yet.');
-      else render(GSStore.sortEntries(localEntries(board)), 'No scores on this device for this board yet.');
-    });
+    // Offline the global tab shows this device's records.
+    render(GSStore.sortEntries(localEntries(scoresBoard)), 'No scores on this device for this board yet.');
   }
 }
 
@@ -1065,7 +1060,13 @@ async function boot() {
         progress = doc.progress;
         GSStore.save({ v: doc.v, settings: settings, progress: progress });
       }
+    } else {
+      platform.scheduleCloudSave({ v: doc.v, settings: settings, progress: progress }); // seed the empty slot
     }
+    // Preferences and key bindings: platform values win over local defaults.
+    const [remoteSettings] = await Promise.all([platform.loadSettings(), platform.loadKeys()]);
+    if (GSPlatform.applyRemoteSettings(settings, remoteSettings)) GSStore.save({ v: doc.v, settings: settings, progress: progress });
+    platform.baselineSettings(settings);
   }
   ui = createUI(rootEl, {
     onUiSound: function () { sfx('ui'); },
@@ -1079,7 +1080,14 @@ async function boot() {
       const next = lessons.findIndex(function (l) { return !progress.tutorialDone[l.id]; });
       startLesson(next === -1 ? 0 : next);
     },
-    onOpenHelp: function () { ui.showHelp({ bindings: BINDINGS }); },
+    onOpenHelp: function () { ui.showHelp({ bindings: bindingsHelp() }); },
+    onSignIn: function () { platform.signIn(); },
+    onInvite: async function () {
+      const link = platform.inviteLink();
+      if (!link) return;
+      const ps = platformStrings();
+      try { await navigator.clipboard.writeText(link); ui.toast(ps.inviteCopied); } catch (e) { ui.toast(ps.inviteFailed); }
+    },
     onOpenSettings: openSettings,
     onOpenScores: openScores,
     onRelease: doRelease,
@@ -1124,7 +1132,6 @@ async function boot() {
   }
   ensurePenMarker();
   requestAnimationFrame(inputTick);
-  fetchServerTime().then(function () { if (appState === 'title') ui.updateDailyCountdown(nextDailyText()); });
   if (platform.hosted()) platform.loadProfile().then(function () { updateSyncLine(); });
   updateSyncLine();
   transition('profile-ready', platform.hosted() ? 'hosted profile loading' : 'guest profile loaded');

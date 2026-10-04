@@ -10,10 +10,9 @@
  *
  * Self-contained: serves the repo over an embedded static server on an
  * ephemeral port (server.js is the game's authoritative server and is
- * NOT used here). The embedded server answers /api/v1/time plus minimal
- * stubs of the game's own-server score/leaderboard routes so the wired
- * client paths get real responses; hosted-mode platform calls are inert
- * without a launch token. The game is fully playable offline.
+ * NOT used here). The embedded server mocks the StarHermit /api routes for a
+ * final signed-in pass; the offline passes must make no /api request. The
+ * game is fully playable offline.
  *
  * Run: npm run test:e2e
  */
@@ -49,49 +48,25 @@ const MIME = {
   '.ts': 'application/typescript; charset=utf-8'
 };
 
+// StarHermit platform mocks for the signed-in pass; offline passes must make no /api call.
+const apiLog = [];
+function platformMock(req, res, p) {
+  apiLog.push(`${req.method} ${p}`);
+  const json = (b, st = 200) => { res.writeHead(st, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(b)); };
+  if (p.endsWith('/profile')) return json({ username: 'raw', nickname: 'Inkwell' });
+  if (p.endsWith('/games/guardian-test/settings') && req.method === 'GET') return json({ settings: { music: 0.25 } });
+  if (p.endsWith('/games/guardian-test/settings')) return json({ settings: {} });
+  if (p.endsWith('/games/guardian-test/controls')) return json({ actions: [{ action: 'release', codes: ['KeyE'] }] });
+  if (p.endsWith('/cloud-saves/game:guardian-test/info')) return json({ exists: false });
+  if (p.endsWith('/cloud-saves/game:guardian-test')) return json({});
+  return json({ error: 'not found' }, 404);
+}
+
 function createServer() {
-  // Minimal stand-in for the game's own server.js API surface so the wired
-  // client paths (score submit + board read) get real 200s in the harness.
-  const boardEntries = [];
   return http.createServer(async (req, res) => {
     try {
       const url = new URL(req.url, 'http://x');
-      if (url.pathname === '/api/v1/time') {
-        res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
-        res.end(JSON.stringify({ now: Date.now() }));
-        return;
-      }
-      if (url.pathname === '/api/v1/leaderboard') {
-        const board = url.searchParams.get('board') || '';
-        const entries = boardEntries
-          .filter((e) => e.board === board)
-          .sort((a, b) => b.score - a.score)
-          .slice(0, 50);
-        res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
-        res.end(JSON.stringify({ board, entries, validated: true }));
-        return;
-      }
-      if (url.pathname === '/api/v1/score' && req.method === 'POST') {
-        let raw = '';
-        await new Promise((resolve, reject) => {
-          req.on('data', (c) => { raw += c; if (raw.length > 200000) reject(new Error('too big')); });
-          req.on('end', resolve);
-          req.on('error', reject);
-        });
-        const body = JSON.parse(raw || '{}');
-        const entry = {
-          board: String(body.board || ''), name: String(body.name || 'guest'),
-          sessionId: String(body.sessionId || ''), score: (body.envelope && body.envelope.result) ? body.envelope.result.score : 0,
-          won: !!(body.envelope && body.envelope.result && body.envelope.result.won),
-          invalid: 0, durationMs: 0
-        };
-        boardEntries.push(entry);
-        const ranked = boardEntries.filter((e) => e.board === entry.board);
-        res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
-        res.end(JSON.stringify({ ok: true, position: ranked.length, of: ranked.length,
-          top: ranked.slice(-10) }));
-        return;
-      }
+      if (url.pathname.startsWith('/api/')) return platformMock(req, res, decodeURIComponent(url.pathname));
       let rel = decodeURIComponent(url.pathname);
       if (rel === '/' || rel.endsWith('/')) rel += 'index.html';
       const file = path.normalize(path.join(ROOT, rel));
@@ -305,6 +280,45 @@ async function runPass(browser, name, contextOpts) {
   }
 }
 
+// Signed-in launch: nickname, synced settings, effective binding in Help,
+// invite link from the visible title button, cloud slot seeded.
+async function signedInPass(browser) {
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+  const page = await context.newPage();
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
+  page.on('console', (m) => { if ((m.type() === 'error' || m.type() === 'warning') && !browserNoise.test(m.text())) errors.push(`console ${m.type()}: ${m.text()}`); });
+  await page.addInitScript(() => {
+    window.__copied = [];
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText: async (t) => { window.__copied.push(t); } } });
+  });
+  const b64u = (o) => Buffer.from(JSON.stringify(o)).toString('base64url');
+  const token = 'h.' + b64u({ sub: 'ink-12345678', game_scope: 'guardian-test', exp: Math.floor(Date.now() / 1000) + 3600 }) + '.s';
+  try {
+    await page.goto(`${BASE}/#game_token=${token}`, { waitUntil: 'load' });
+    await page.waitForSelector('.gs-title .gs-logo', { timeout: 20000 });
+    if (new URL(page.url()).hash) throw new Error('launch token left in the URL');
+    await page.waitForFunction(() => /Signed in as Inkwell/.test(document.querySelector('.gs-sync-status')?.textContent || ''));
+    if (await page.getByRole('button', { name: 'Sign in with StarHermit' }).count()) throw new Error('sign-in shown while signed in');
+    const music = await page.evaluate(() => JSON.parse(JSON.parse(localStorage.getItem('guardiansketch.save.v1')).payload).settings.music);
+    if (music !== 0.25) throw new Error('platform settings not applied: ' + music);
+    await page.getByRole('button', { name: 'Invite a friend' }).click();
+    await page.waitForFunction(() => window.__copied.length === 1);
+    const link = await page.evaluate(() => window.__copied[0]);
+    if (!/\/game-invite\/ink-12345678\/guardian-test$/.test(link)) throw new Error('bad invite link ' + link);
+    await page.screenshot({ path: SHOT('title', 'signed-in') });
+    await page.getByRole('button', { name: 'Help' }).click();
+    const help = await page.textContent('.gs-bindings');
+    if (!/E\s*Release the storm/.test(help)) throw new Error('help does not show the platform binding: ' + help);
+    for (let i = 0; i < 40 && !apiLog.includes('PUT /api/v1/me/cloud-saves/game:guardian-test'); i++) await page.waitForTimeout(100);
+    if (!apiLog.includes('PUT /api/v1/me/cloud-saves/game:guardian-test')) throw new Error('cloud slot not seeded: ' + apiLog.join(', '));
+    if (errors.length) throw new Error('page errors:\n' + errors.join('\n'));
+    console.log('ok - [signed-in] nickname, synced settings, platform binding in Help, invite link, cloud seed');
+  } finally {
+    await context.close();
+  }
+}
+
 const server = createServer();
 let browser = null;
 let BASE = null;
@@ -324,6 +338,8 @@ try {
     deviceScaleFactor: 2
   });
 
+  if (apiLog.length) throw new Error('offline passes made platform calls: ' + apiLog.join(', '));
+  await signedInPass(browser);
   console.log('\nE2E PASS — guardian-sketch, desktop + mobile, no page errors');
 } catch (e) {
   console.error('\nE2E FAIL — ' + (e && e.message ? e.message : e));

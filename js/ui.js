@@ -6,6 +6,7 @@
 
 import { PRESETS, CATEGORIES as GFX_CATEGORIES, presetTier, resolve as resolveGfx, choosePreset, clampScale } from './gfx.js';
 import { gfxStrings, fmt } from './gfx-i18n.js';
+import { platformStrings } from './platform-i18n.js';
 
 function el(tag, cls, text) {
   const n = document.createElement(tag);
@@ -163,6 +164,14 @@ export function createUI(root, handlers) {
         grid.appendChild(btn(pair[0], null, function () { clickSfx(); H(pair[1]); }));
       });
     card.appendChild(grid);
+    // StarHermit: sign-in on the platform host without a token; invite link when signed in.
+    if (data.canSignIn || data.signedIn) {
+      const ps = platformStrings();
+      const acct = el('div', 'gs-row gs-account-row');
+      if (data.canSignIn) acct.appendChild(btn(ps.signIn, null, function () { clickSfx(); H('onSignIn'); }));
+      if (data.signedIn) acct.appendChild(btn(ps.invite, null, function () { clickSfx(); H('onInvite'); }));
+      card.appendChild(acct);
+    }
     if (data.compatWarning) card.appendChild(el('p', 'gs-compat', data.compatWarning));
     titleNode.appendChild(card);
     root.appendChild(titleNode);
