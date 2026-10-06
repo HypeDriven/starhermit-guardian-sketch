@@ -78,9 +78,17 @@ export function createUI(root, handlers) {
   function toast(text) {
     const t = el('div', 'gs-toast', text);
     toastBox.appendChild(t);
+    fitToasts();
     announceAssert(text);
     setTimeout(function () { t.classList.add('out'); }, 1800);
-    setTimeout(function () { t.remove(); }, 2300);
+    setTimeout(function () { t.remove(); fitToasts(); }, 2300);
+  }
+  // While a modal is open the toasts sit at the top edge and the overlay
+  // reserves their height (layout px of the equally zoomed stack), so a toast
+  // never covers a panel heading or button.
+  function fitToasts() {
+    const h = toastBox.offsetHeight;
+    document.documentElement.style.setProperty('--gs-toast-h', h ? (h + 8) + 'px' : '0px');
   }
   function toastReason(reason) { toast(INVALID_TEXT[reason] || reason || 'Not allowed'); }
 
@@ -100,7 +108,10 @@ export function createUI(root, handlers) {
       if (ev.target === wrap && rec.dismissable) closeModal();
     });
     const focusable = node.querySelector('button, [href], input, select, [tabindex]');
-    if (focusable) focusable.focus();
+    // no scroll: a first button low in a tall panel (results on a phone) would
+    // otherwise open the panel scrolled past its heading
+    if (focusable) focusable.focus({ preventScroll: true });
+    node.scrollTop = 0;
     return rec;
   }
   function closeModal() {
@@ -139,20 +150,25 @@ export function createUI(root, handlers) {
     hideAll();
     titleNode = el('div', 'gs-title');
     const card = el('div', 'gs-title-card');
-    card.appendChild(art('./assets/key-art.webp', 'gs-title-art'));
-    card.appendChild(el('h1', 'gs-logo', 'Guardian Sketch'));
-    card.appendChild(el('p', 'gs-tagline', 'Draw ink. Shield the wisps. Weather the storm.'));
+    // two halves: display:contents everywhere except short landscape, where
+    // they become side-by-side columns so the whole title fits without scrolling
+    const head = el('div', 'gs-title-col gs-title-head');
+    const menu = el('div', 'gs-title-col gs-title-menu');
+    card.append(head, menu);
+    head.appendChild(art('./assets/key-art.webp', 'gs-title-art'));
+    head.appendChild(el('h1', 'gs-logo', 'Guardian Sketch'));
+    head.appendChild(el('p', 'gs-tagline', 'Draw ink. Shield the wisps. Weather the storm.'));
 
     const stats = el('p', 'gs-title-stats');
     stats.textContent = 'Journey stars: ' + data.totalStars + ' / 120' +
       (data.dailyDone ? '  ·  Today’s daily: done (' + data.dailyDone + ')' : '  ·  Today’s daily: open');
-    card.appendChild(stats);
+    head.appendChild(stats);
 
     dailyCountdownEl = el('p', 'gs-daily-countdown', data.nextDailyText || '');
-    card.appendChild(dailyCountdownEl);
+    head.appendChild(dailyCountdownEl);
 
     syncStatusEl = el('p', 'gs-sync-status', data.syncText || '');
-    card.appendChild(syncStatusEl);
+    head.appendChild(syncStatusEl);
 
     const grid = el('div', 'gs-title-grid');
     const play = btn('Play', 'primary big', function () { clickSfx(); H('onPlay'); });
@@ -163,16 +179,16 @@ export function createUI(root, handlers) {
       .forEach(function (pair) {
         grid.appendChild(btn(pair[0], null, function () { clickSfx(); H(pair[1]); }));
       });
-    card.appendChild(grid);
+    menu.appendChild(grid);
     // StarHermit: sign-in on the platform host without a token; invite link when signed in.
     if (data.canSignIn || data.signedIn) {
       const ps = platformStrings();
       const acct = el('div', 'gs-row gs-account-row');
       if (data.canSignIn) acct.appendChild(btn(ps.signIn, null, function () { clickSfx(); H('onSignIn'); }));
       if (data.signedIn) acct.appendChild(btn(ps.invite, null, function () { clickSfx(); H('onInvite'); }));
-      card.appendChild(acct);
+      menu.appendChild(acct);
     }
-    if (data.compatWarning) card.appendChild(el('p', 'gs-compat', data.compatWarning));
+    if (data.compatWarning) menu.appendChild(el('p', 'gs-compat', data.compatWarning));
     titleNode.appendChild(card);
     root.appendChild(titleNode);
     play.focus();

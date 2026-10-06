@@ -118,6 +118,7 @@ body.high-contrast .gs-panel, body.high-contrast .gs-learn-card { background-ima
 }
 .gs-compat { margin-top: 1em; color: var(--gs-accent); font-size: 0.9em; }
 @media (max-width: 520px) { .gs-title-grid { grid-template-columns: repeat(2, 1fr); } }
+.gs-title-col { display: contents; }
 
 /* ---------- overlays / panels ---------- */
 .gs-overlay-root { position: absolute; inset: 0; pointer-events: none; z-index: 20; }
@@ -280,6 +281,10 @@ body.left-handed .gs-bar { flex-direction: row-reverse; }
   transition: opacity 0.4s; max-width: calc(80vw / var(--ui-scale, 1)); text-align: center;
 }
 .gs-toast.out { opacity: 0; }
+/* modal open: toasts move to the top edge; the overlay reserves their height */
+:root:has(.gs-overlay) .gs-toasts { top: calc(var(--gs-sat) + 8px); bottom: auto; }
+.gs-overlay { padding-top: calc(var(--gs-sat) + 0.5em + var(--gs-toast-h, 0px)); }
+.gs-overlay > .gs-panel { max-height: min(calc(88dvh / var(--ui-scale, 1)), 100%); }
 .gs-caption {
   position: absolute; bottom: calc(var(--gs-sab) + 8px); left: 50%; transform: translateX(-50%);
   z-index: 29; background: rgba(0, 0, 0, 0.78); color: #fff;
@@ -324,7 +329,15 @@ body.left-handed .gs-mirror { right: auto; left: calc(var(--gs-sal) + 10px); }
 }
 /* Landscape mobile: keep the tray narrow on the side when very short. */
 @media (max-height: 480px) and (orientation: landscape) {
-  .gs-title-art { max-height: calc(22vh / var(--ui-scale, 1)); }
+  /* title: art + text on the left, menu on the right, so it fits ~390px */
+  .gs-title { padding-top: calc(var(--gs-sat) + 0.5em); padding-bottom: calc(var(--gs-sab) + 0.5em); }
+  .gs-title-card { display: flex; align-items: center; gap: 1.2em; max-width: min(calc(96vw / var(--ui-scale, 1)), 860px); }
+  .gs-title-col { display: block; flex: 1 1 0; min-width: 0; }
+  .gs-title-menu { flex-grow: 1.3; }
+  .gs-title-art { width: 100%; max-height: calc(34vh / var(--ui-scale, 1)); }
+  .gs-title-grid { margin-top: 0; gap: 0.5em; }
+  .gs-title-grid .gs-btn.primary.big { padding: 0.55em 1.5em; }
+  .gs-title-menu .gs-account-row { margin-top: 0.5em; justify-content: center; }
   .gs-result-art { max-height: calc(14vh / var(--ui-scale, 1)); }
   .gs-bar {
     left: auto; right: calc(var(--gs-sar) + 6px); transform: none;
