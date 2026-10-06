@@ -117,7 +117,13 @@ body.high-contrast .gs-panel, body.high-contrast .gs-learn-card { background-ima
   display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.7em; margin-top: 1.2em;
 }
 .gs-compat { margin-top: 1em; color: var(--gs-accent); font-size: 0.9em; }
-@media (max-width: 520px) { .gs-title-grid { grid-template-columns: repeat(2, 1fr); } }
+/* phone portrait: one-line logo and a 3×3 menu under Play so the whole title
+   fits a ~390×844 screen without scrolling (very short phones still scroll) */
+@media (max-width: 520px) {
+  .gs-logo { font-size: clamp(28px, min(calc(6vh / var(--ui-scale, 1)), calc(9vw / var(--ui-scale, 1))), 54px); }
+  .gs-title-grid { grid-template-columns: repeat(3, 1fr); gap: 0.5em; }
+  .gs-title-grid .gs-btn { padding-inline: 0.35em; }
+}
 .gs-title-col { display: contents; }
 
 /* ---------- overlays / panels ---------- */
