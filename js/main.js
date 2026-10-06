@@ -633,8 +633,9 @@ function updatePenMarker() {
   penMarker.classList.remove('gs-hidden');
   const s = renderer.worldToScreen(pen.x, pen.y);
   const rect = rootEl.getBoundingClientRect();
-  penMarker.style.left = (s.x - rect.left) + 'px';
-  penMarker.style.top = (s.y - rect.top) + 'px';
+  const z = (window.UIScale && window.UIScale.value) || 1; // .gs-pen is zoomed by --ui-scale
+  penMarker.style.left = (s.x - rect.left) / z + 'px';
+  penMarker.style.top = (s.y - rect.top) / z + 'px';
   penMarker.classList.toggle('down', pen.down);
 }
 
