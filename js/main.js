@@ -474,7 +474,22 @@ function showResults(won, entries, boardLabel) {
     onBack: toTitle,
     onCopySeed: copySeed
   });
+  postHighScore(st.score.total);
   stopPresence();
+}
+
+// Signed in, every finished round except Learn lessons posts its total to the
+// platform high-score board; the results panel shows the rank line.
+function postHighScore(total) {
+  const line = document.getElementById('results-lb');
+  if (!line) return;
+  if (!platform.hosted() || session.mode === 'tutorial') { line.hidden = true; return; }
+  const ps = platformStrings();
+  line.hidden = false;
+  line.textContent = ps.lbPosting;
+  platform.postHighScore(Math.max(0, Math.round(total))).then(function (r) {
+    line.textContent = !r.posted ? ps.lbNotPosted : r.rank ? ps.lbRank.replace('{rank}', r.rank) : ps.lbPosted;
+  });
 }
 
 function copySeed() {

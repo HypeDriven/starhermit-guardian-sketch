@@ -635,6 +635,12 @@ export function createUI(root, handlers) {
       p.appendChild(el('p', 'gs-note', 'Board: ' + (d.boardLabel || 'casual (unvalidated)')));
     }
 
+    const lb = el('p', 'gs-note', '');
+    lb.id = 'results-lb';
+    lb.setAttribute('role', 'status');
+    lb.hidden = true;
+    p.appendChild(lb);
+
     const row = el('div', 'gs-row');
     row.appendChild(btn('Retry', null, function () { clickSfx(); closeModal(); d.onRetry(); }));
     if (d.canNext) row.appendChild(btn('Next level', 'primary', function () { clickSfx(); closeModal(); d.onNext(); }));

@@ -156,6 +156,23 @@
       } catch (e) { return null; }
     }
 
+    /* ---------- platform high-score board (score-script.js) ---------- */
+    // Post a finished round's total via StarHermit.submitScores; resolves
+    // {posted, rank} — the player's rank on the `high-score` board, or null.
+    async function postHighScore(total) {
+      if (!hosted()) return { posted: false, rank: null };
+      try {
+        var keys = await sh.submitScores({ 'high-score': total });
+        if (!keys || keys.indexOf('high-score') < 0) return { posted: false, rank: null };
+        try {
+          var r = await sh.leaderboard('high-score', { pageSize: 100 });
+          var items = (r && r.items) || [];
+          for (var i = 0; i < items.length; i++) if (items[i].userId === sh.userId) return { posted: true, rank: items[i].rank };
+          return { posted: true, rank: null };
+        } catch (e) { return { posted: true, rank: null }; }
+      } catch (e) { return { posted: false, rank: null }; }
+    }
+
     if (hosted()) syncStatus = 'saving'; // not yet mirrored; first load/push settles it (no hook: the caller is still constructing)
 
     return {
@@ -178,7 +195,8 @@
       canSignIn: canSignIn,
       signIn: signIn,
       inviteLink: inviteLink,
-      hostedBoardEntries: hostedBoardEntries
+      hostedBoardEntries: hostedBoardEntries,
+      postHighScore: postHighScore
     };
   }
 

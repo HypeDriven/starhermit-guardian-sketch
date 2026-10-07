@@ -33,6 +33,7 @@ File map (everything that ships or matters):
 | `js/main.js` | App state machine, session/commands, input (pointer, keyboard pen, gamepad), progression, replay envelope, StarHermit account wiring, boot |
 | `js/platform.js` | StarHermit glue over the shared SDK: launch token, profile nickname, `game:<slug>` cloud-save mirror (debounced + pagehide flush, remote-preferred load), settings KV, key bindings, sign-in, invite link, hosted read-only boards |
 | `css/main.css` | Complete stylesheet, responsive rules, safe areas, accessibility body classes |
+| `score-script.js` | StarHermit platform script (`server=score-script.js`): range-checks a finished round's total and posts it to the `high-score` leaderboard (canonical copy in the games repo's `tools/score-script.js`) |
 | `server.js` | Local Node host: static files plus legacy `/api/v1/*` routes (replay-validated score submission) the client no longer calls |
 | `starhermit-sdk.js`, `js/platform-i18n.js` | Shared StarHermit client; localized account strings |
 | `assets/` | `key-art.webp`, `results-saved.webp`, `results-hit.webp`, `paper-grain.webp` |
@@ -234,7 +235,7 @@ Shipping language: **English only** (en-US strings; the same text serves en-GB),
 
 ## 12. StarHermit integration
 
-Manifest `starhermit.txt`: `name=Guardian Sketch`, `launch=index.html`, `owner=…`, `server=server.js`, `version=1.0.0`, `contentVersion=1`, `cover`, and one `control.<action>` line per keyboard action. All platform traffic goes through the shared client `starhermit-sdk.js` (loaded by `index.html` before `js/platform.js`, which calls `StarHermit.init()` when the game creates its platform at boot). Without a launch token the game makes no network request.
+Manifest `starhermit.txt`: `name=Guardian Sketch`, `launch=index.html`, `owner=…`, `server=score-script.js`, `version=1.0.0`, `contentVersion=1`, `cover`, and one `control.<action>` line per keyboard action. All platform traffic goes through the shared client `starhermit-sdk.js` (loaded by `index.html` before `js/platform.js`, which calls `StarHermit.init()` when the game creates its platform at boot). Without a launch token the game makes no network request.
 
 Used:
 - **Launch token:** the SDK reads `#game_token=<jwt>[&session_id=]` (library launch) or `#access_token=<jwt>` (sign-in return), strips it via `history.replaceState`, takes `sub` / `game_scope` (slug never hard-coded), sends `Authorization: Bearer` on every same-origin call and renews the token before expiry. If renewal is refused the title sync line returns to offline, a toast says progress keeps saving on this device, and sign-in is offered again where available. Hosted mode is active iff a token is held.
@@ -244,11 +245,12 @@ Used:
 - **Settings KV:** hosted, the preferences (volumes, mute, captions, graphics, theme, reduced motion, high contrast, palette, large text, left-handed, haptics, board mirror, confirm-release) are patched whenever a persist changes them, and the platform values are applied at boot.
 - **Controls:** keyboard input is routed by `KeyboardEvent.code` through `StarHermit.loadBindings` (`penLeft/Right/Up/Down`, `penFast`, `penToggle`, `release`, `undo`, `hint`, `skip`, `pause`, `camera`); Help lists the effective keys.
 - **Leaderboards:** hosted, clients never submit — the global board is read-only (`GET /api/v1/games/{slug}` → `leaderboardId` → entries) with userIds resolved to nicknames; without a board, and always offline, the Scores screen shows on-device records labelled "casual (unvalidated)". Personal bests live in the save doc (local + cloud).
+- **High-score board:** signed in, every finished round except Learn lessons posts its total through `StarHermit.submitScores` (a practice session whose `score-script.js` posts it to the `high-score` board: integer, higher is better, 0–10,000); the results panel then shows "Leaderboard rank: #N" (or posted / not posted), localized in the nine locales. Standalone play posts nothing and shows no line.
 - **Daily:** resolved locally from the UTC date (deterministic, identical on the server).
 
 `server.js` is a Node host for local development (static files, `/api/v1/time`, `/api/v1/daily`, a replay-validating `POST /api/v1/score` and `/api/v1/leaderboard`); the client no longer calls these routes.
 
-Not used (by design for a solo title): realtime rooms, relay, matchmaking, sessions, chat, voice, platform invites. Achievements stay local (part of the cloud-saved doc); `server.js` is not a Jint game script, so there is no script-owned unlock path. Telemetry stays local-only and is never sent.
+Not used (by design for a solo title): realtime rooms, relay, matchmaking, multiplayer sessions, chat, voice, platform invites. Achievements stay local (part of the cloud-saved doc); `score-script.js` only posts scores, so there is no script-owned unlock path. Telemetry stays local-only and is never sent.
 
 ## 13. Technical architecture
 
@@ -287,7 +289,7 @@ QA bar (checkable): every feature reachable by clicks/taps; no console errors or
 
 ## 16. Known limitations
 
-- On-platform (signed in), scoreboards are read-only global leaderboards plus on-device records; offline they are on-device only (the replay-validating routes in `server.js` are not called by the client).
+- On-platform (signed in), scoreboards are read-only global leaderboards plus on-device records, and finished rounds post to the `high-score` board; offline they are on-device only (the replay-validating routes in `server.js` are not called by the client).
 - The **Color palette: High visibility** setting is stored and shown but has no effect on rendering (High contrast is the working option).
 - The **Voice** bus slider controls a bus nothing plays on.
 - Hint search runs synchronously on the main thread; on dense stages the two-stroke pass can stall input for a moment.
@@ -300,7 +302,7 @@ QA bar (checkable): every feature reachable by clicks/taps; no console errors or
 
 - Localization to en-GB, es-419, es-ES, de-DE, fr-FR, fr-CA, pt-BR and it-IT with a string table and language selection from the host locale.
 - Friends-filtered platform leaderboards (the hosted global board is read-only per the platform contract; there is no client submission path).
-- Idempotent achievement delivery through the platform (achievements are local today; `server.js` is not a Jint game script, so there is no script-owned unlock path).
+- Idempotent achievement delivery through the platform (achievements are local today; `score-script.js` has no unlock path).
 - A high-visibility hazard palette bound to the existing setting.
 - Cancel-without-commit for gamepad B and pointer cancel parity.
 
