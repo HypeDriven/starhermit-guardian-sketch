@@ -956,8 +956,8 @@ export function createRenderer(container, opts) {
 
   function draw() {
     applySize();
-    if (composer) composer.render();
-    else renderer.render(scene, camera);
+    if (composer) (globalThis.GameOptions ? globalThis.GameOptions.draw(composer.renderer, () => composer.render()) : composer.render());
+    else (globalThis.GameOptions ? globalThis.GameOptions.draw(renderer, () => renderer.render(scene, camera)) : renderer.render(scene, camera));
   }
 
   function setReducedMotion(b) { reducedMotion = !!b; applyMotion(); }
