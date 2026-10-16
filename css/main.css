@@ -116,6 +116,8 @@ body.high-contrast .gs-panel, body.high-contrast .gs-learn-card { background-ima
 .gs-title-grid {
   display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.7em; margin-top: 1.2em;
 }
+/* long single words in other languages wrap (hyphenated) instead of clipping */
+.gs-title-grid .gs-btn { min-width: 0; overflow-wrap: anywhere; hyphens: auto; }
 .gs-compat { margin-top: 1em; color: var(--gs-accent); font-size: 0.9em; }
 /* phone portrait: one-line logo and a 3×3 menu under Play so the whole title
    fits a ~390×844 screen without scrolling (very short phones still scroll) */

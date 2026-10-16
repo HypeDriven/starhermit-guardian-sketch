@@ -19,7 +19,7 @@ function harness(href, routes = {}, hooks = {}) {
     if (path.includes('/cloud-saves/')) {
       const key = decodeURIComponent(path.split('/cloud-saves/')[1]);
       if (key.endsWith('/info')) return new Response(JSON.stringify({ exists: !!store[key.slice(0, -5)] }), { status: 200 });
-      if (method === 'PUT') { store[key] = Buffer.from(JSON.parse(init.body).dataBase64, 'base64'); return new Response('{}', { status: 200 }); }
+      if (method === 'PUT') { store[key] = Buffer.from(JSON.parse(init.body).dataBase64, 'base64'); return new Response(JSON.stringify({ etag: '"v' + calls.length + '"' }), { status: 200 }); }
       return store[key] ? new Response(store[key], { status: 200 }) : new Response('', { status: 404 });
     }
     const hit = Object.entries(routes).find(([k]) => `${method} ${path}`.endsWith(k));
@@ -91,5 +91,39 @@ test('standalone: offline, default keys, no network calls', async () => {
   assert.equal(p.actionForCode('Space'), 'penToggle'); assert.equal(p.actionForCode('KeyR'), 'release');
   assert.equal(await p.hostedBoardEntries(), null); assert.equal(p.inviteLink(), null);
   assert.equal(h.calls.length, 0);
-  assert.equal(harness('https://guardian-id.starhermit.com/').platform.canSignIn(), true);
+  assert.equal(harness('https://0b9d6f2e-3c4a-4e5b-9a7c-1d2e3f405162.starhermit.com/').platform.canSignIn(), true);
+});
+
+test('save conflict: the other device\'s save is reloaded, merged (best of each record) and saved again', async () => {
+  const remoteDoc = { v: 1, settings: { music: 0.1 }, progress: { journeyStars: { j01: 3, j02: 1 }, journeyBest: { j01: 900 }, stormBest: 400, achievements: { 'first-save': 5 }, tutorialDone: { t1: true }, stats: { rounds: 9 } } };
+  let conflictOnce = true, remote = null;
+  const zipped = async (obj) => { const sdk = SDK.create({ window: { location: { hash: '', search: '', pathname: '/', origin: 'https://x', hostname: 'x', href: 'https://x/' }, history: { replaceState() {} } }, fetch: async () => new Response('', { status: 404 }) }); return sdk._zip('save.json', new TextEncoder().encode(JSON.stringify(obj))); };
+  const remoteBytes = await zipped(remoteDoc);
+  const puts = [];
+  const win = { location: { hash: '#game_token=' + TOKEN, search: '', pathname: '/', origin: 'https://x.example', hostname: 'x.example', href: 'https://x.example/' }, history: { replaceState() {} } };
+  const fetch = async (path, init = {}) => {
+    const method = init.method || 'GET';
+    if (path.endsWith('/info')) return new Response(JSON.stringify({ exists: true, etag: conflictOnce ? '"v1"' : '"v2"' }), { status: 200 });
+    if (path.includes('/cloud-saves/') && method === 'GET') return new Response(remoteBytes, { status: 200 });
+    if (path.includes('/cloud-saves/') && method === 'PUT') {
+      if (conflictOnce) { conflictOnce = false; return new Response(JSON.stringify({ error: 'conflict', etag: '"v2"' }), { status: 412 }); }
+      puts.push(init.headers); return new Response(JSON.stringify({ etag: '"v3"' }), { status: 200 });
+    }
+    return new Response('', { status: 404 });
+  };
+  const sh = SDK.create({ window: win, fetch, setTimeout: (fn, ms) => { const t = setTimeout(fn, ms); t.unref?.(); return t; } });
+  const local = Store.fresh();
+  local.progress.journeyStars = { j01: 1, j03: 2 }; local.progress.journeyBest = { j01: 1200 }; local.progress.stormBest = 100;
+  const merged = new Promise((resolve) => {
+    const p = GSPlatform.createPlatform({ onConflict: (r) => { remote = r; const progress = Store.mergeProgress(r.progress, local.progress); p.scheduleCloudSave({ v: 1, settings: local.settings, progress }); p.flushCloudSave().then(() => resolve(progress)); } }, sh);
+    p.loadCloudSave().then(() => { p.scheduleCloudSave(local); p.flushCloudSave(); });
+  });
+  const progress = await merged;
+  assert.deepEqual(remote.progress.journeyStars, { j01: 3, j02: 1 });
+  assert.deepEqual(progress.journeyStars, { j01: 3, j02: 1, j03: 2 });
+  assert.equal(progress.journeyBest.j01, 1200);
+  assert.equal(progress.stormBest, 400);
+  assert.equal(progress.stats.rounds, 9);
+  assert.ok(progress.achievements['first-save'] && progress.tutorialDone.t1);
+  assert.equal(puts.length, 1, 'merged save written once');
 });

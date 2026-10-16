@@ -1,6 +1,6 @@
 // Guardian Sketch — localized strings for the StarHermit account surface (sign-in,
-// invite link, sign-out notice), picked from navigator.language like the
-// Graphics panel (exact match, then language family, then en-US).
+// invite link, sign-out notice) in the game's current language (window.GSI18N,
+// which follows the Language setting); exact match, then language family, then en-US.
 import { pickLocale } from './gfx-i18n.js';
 
 const EN = {
@@ -87,9 +87,14 @@ const STRINGS = {
   },
 };
 
+function gameLocale() {
+  if (typeof window !== 'undefined' && window.GSI18N) return window.GSI18N.lang;
+  return typeof navigator !== 'undefined' ? navigator.language : 'en-US';
+}
+
 export const PLATFORM_LOCALES = Object.keys(STRINGS);
 
 /** Strings for the account surface in the browser's locale (en-US fallback). */
-export function platformStrings(lang = (typeof navigator !== 'undefined' ? navigator.language : 'en-US')) {
+export function platformStrings(lang = gameLocale()) {
   return { ...EN, ...(STRINGS[pickLocale(lang)] || {}) };
 }

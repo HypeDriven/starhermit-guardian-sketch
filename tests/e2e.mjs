@@ -50,15 +50,25 @@ const MIME = {
 
 // StarHermit platform mocks for the signed-in pass; offline passes must make no /api call.
 const apiLog = [];
+// Per-pass platform state: account language, per-player settings KV, filed reports.
+const mock = { preferredLanguage: 'en', kv: {}, reports: [] };
 function platformMock(req, res, p) {
   apiLog.push(`${req.method} ${p}`);
   const json = (b, st = 200) => { res.writeHead(st, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(b)); };
+  const body = () => new Promise((resolve) => { let d = ''; req.on('data', (c) => { d += c; }); req.on('end', () => { try { resolve(JSON.parse(d || '{}')); } catch (e) { resolve({}); } }); });
   if (p.endsWith('/profile')) return json({ username: 'raw', nickname: 'Inkwell' });
-  if (p.endsWith('/games/guardian-test/settings') && req.method === 'GET') return json({ settings: { music: 0.25 } });
+  if (p === '/api/v1/me/language') return json({ preferredLanguage: mock.preferredLanguage });
+  if (/\/games\/guardian-test\/settings\/[^/]+$/.test(p) && req.method === 'PUT') {
+    return body().then((b) => { mock.kv[p.split('/').pop()] = b.value; json({}); });
+  }
+  if (p.endsWith('/games/guardian-test/settings') && req.method === 'GET') return json({ settings: { music: 0.25, ...mock.kv } });
   if (p.endsWith('/games/guardian-test/settings')) return json({ settings: {} });
+  if (p.endsWith('/games/guardian-test/reports') && req.method === 'POST') {
+    return body().then((b) => { mock.reports.push(b); json({ id: 'r1', kind: b.kind, status: 'open', createdAt: new Date().toISOString() }, 201); });
+  }
   if (p.endsWith('/games/guardian-test/controls')) return json({ actions: [{ action: 'release', codes: ['KeyE'] }] });
   if (p.endsWith('/cloud-saves/game:guardian-test/info')) return json({ exists: false });
-  if (p.endsWith('/cloud-saves/game:guardian-test')) return json({});
+  if (p.endsWith('/cloud-saves/game:guardian-test')) return json({ etag: '"v' + apiLog.length + '"' });
   return json({ error: 'not found' }, 404);
 }
 
@@ -319,6 +329,66 @@ async function signedInPass(browser) {
   }
 }
 
+// Language: Automatic follows the StarHermit preferred language (fr-CA); an
+// explicit choice made in Settings mid-round re-renders the visible UI in place
+// and is saved to ui.language; Report a problem posts a bug report.
+async function languagePass(browser, name, contextOpts) {
+  mock.preferredLanguage = 'fr-CA'; mock.kv = {}; mock.reports = [];
+  const context = await browser.newContext(contextOpts);
+  const page = await context.newPage();
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
+  page.on('console', (m) => { if ((m.type() === 'error' || m.type() === 'warning') && !browserNoise.test(m.text())) errors.push(`console ${m.type()}: ${m.text()}`); });
+  const b64u = (o) => Buffer.from(JSON.stringify(o)).toString('base64url');
+  const token = 'h.' + b64u({ sub: 'ink-12345678', game_scope: 'guardian-test', exp: Math.floor(Date.now() / 1000) + 3600 }) + '.s';
+  try {
+    await page.goto('about:blank');
+    await page.goto(`${BASE}/#game_token=${token}`, { waitUntil: 'load' });
+    await page.waitForFunction(() => document.documentElement.lang === 'fr-CA', null, { timeout: 20000 });
+    await page.getByRole('button', { name: 'Jouer' }).click();
+    await page.getByRole('button', { name: 'Commencer' }).click();
+    await page.waitForSelector('.gs-ink-label');
+    await page.getByRole('button', { name: '❚❚ Pause' }).click();
+    await page.waitForFunction(() => /En pause/.test(document.querySelector('.gs-panel h2')?.textContent || ''));
+    await page.getByRole('button', { name: 'Paramètres' }).click();
+    const choice = page.locator('[data-game-language="choice"]');
+    await choice.scrollIntoViewIfNeeded();
+    const auto = await choice.locator('option').first().textContent();
+    if (!/^Automatique — Français \(Canada\)$/.test(auto)) throw new Error('Automatic label not resolved: ' + auto);
+    await choice.selectOption('it-IT');
+    await page.waitForFunction(() => document.documentElement.lang === 'it-IT');
+    await page.waitForFunction(() => /Salvato/.test(document.querySelector('[data-game-language="status"]')?.textContent || ''));
+    if (mock.kv['ui.language']?.choice !== 'it-IT') throw new Error('ui.language not saved: ' + JSON.stringify(mock.kv));
+    const titles = await page.locator('.gs-panel h2').allTextContents();
+    if (!titles.includes('In pausa') || !titles.includes('Impostazioni')) throw new Error('panels not re-rendered: ' + titles.join(' | '));
+    if (!/Qualità/.test(await page.locator('#gfx-controls').textContent())) throw new Error('graphics labels not re-rendered');
+    if (!/inchiostro/.test(await page.textContent('.gs-ink-label'))) throw new Error('HUD not re-rendered');
+    await page.locator('[data-game-report="title"]').scrollIntoViewIfNeeded();
+    await page.fill('[data-game-report="title"]', 'Test report');
+    await page.click('[data-game-report="send"]');
+    await page.waitForFunction(() => /Grazie/.test(document.querySelector('[data-game-report="status"]')?.textContent || ''));
+    if (!mock.reports[0] || mock.reports[0].kind !== 'bug') throw new Error('report not posted');
+    await page.screenshot({ path: SHOT('language', name) });
+    if (name === 'mobile') {
+      await choice.selectOption('de-DE');
+      await page.waitForFunction(() => document.documentElement.lang === 'de-DE');
+      const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+      if (overflow > 0) throw new Error('German settings overflow by ' + overflow + 'px');
+      await page.screenshot({ path: SHOT('language-de-settings', name) });
+    }
+    await choice.selectOption('auto');
+    await page.waitForFunction(() => document.documentElement.lang === 'fr-CA');
+    await page.getByRole('button', { name: 'Terminé' }).click();
+    await page.getByRole('button', { name: 'Reprendre' }).click();
+    await page.getByRole('button', { name: 'Déclencher' }).waitFor();
+    if (errors.length) throw new Error('page errors:\n' + errors.join('\n'));
+    console.log(`ok - [${name}] Language: Automatic follows fr-CA; Italian mid-round re-renders HUD and panels; ui.language saved; report posted`);
+  } finally {
+    await context.close();
+    mock.preferredLanguage = 'en';
+  }
+}
+
 const server = createServer();
 let browser = null;
 let BASE = null;
@@ -340,6 +410,8 @@ try {
 
   if (apiLog.length) throw new Error('offline passes made platform calls: ' + apiLog.join(', '));
   await signedInPass(browser);
+  await languagePass(browser, 'desktop', { viewport: { width: 1280, height: 800 } });
+  await languagePass(browser, 'mobile', { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 });
   console.log('\nE2E PASS — guardian-sketch, desktop + mobile, no page errors');
 } catch (e) {
   console.error('\nE2E FAIL — ' + (e && e.message ? e.message : e));

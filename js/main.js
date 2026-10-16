@@ -3,8 +3,10 @@
  * optional same-origin server integration. Rules truth lives in GSRules.
  */
 import { createRenderer } from './render.js';
-import { createUI } from './ui.js';
+import { createUI, reasonText } from './ui.js';
 import { platformStrings } from './platform-i18n.js';
+
+const T = window.GSI18N.T, L = window.GSI18N.L;
 
 /* global GSRNG, GSRules, GSContent, GSStore, GSAudio, GSPlatform */
 
@@ -14,26 +16,35 @@ const TELEMETRY_KEY = 'guardiansketch.telemetry';
 const PLAYER_KEY = 'guardiansketch.playername';
 // Help table from the effective key bindings (platform overrides when signed in).
 function keyName(code) {
-  return ({ ArrowLeft: '←', ArrowRight: '→', ArrowUp: '↑', ArrowDown: '↓', Escape: 'Escape', Space: 'Space',
+  if (code === 'Escape') return T('Escape');
+  if (code === 'Space') return T('Space');
+  if (code === 'Enter') return T('Enter');
+  return ({ ArrowLeft: '←', ArrowRight: '→', ArrowUp: '↑', ArrowDown: '↓',
     ShiftLeft: 'Shift', ShiftRight: 'Shift' })[code] || String(code).replace(/^(Key|Digit|Numpad)/, '');
 }
+// [keys, action] rows; both are messages so an open Help panel follows a language change.
 function bindingsHelp() {
   const k = platform.keyMap();
-  const names = function (a) { return Array.from(new Set(k[a].map(keyName))).join(' or '); };
-  const out = {};
-  out[['penLeft', 'penRight', 'penUp', 'penDown'].map(names).join(' ')] = 'Move the pen';
-  out[names('penFast') + ' + move'] = 'Move the pen faster';
-  out[names('penToggle')] = 'Pen down / pen up (draw)';
-  out[names('release')] = 'Release the storm';
-  out[names('undo')] = 'Undo last stroke';
-  out[names('hint')] = 'Hint';
-  out[names('skip')] = 'Skip storm playback';
-  out[names('pause')] = 'Pause / resume';
-  out['Enter'] = 'Confirm default button';
-  out[names('camera')] = 'Reset camera framing';
-  out['Gamepad dpad/stick'] = 'Move the pen';
-  out['Gamepad A / B / Start'] = 'Draw or confirm / cancel / pause';
-  return out;
+  const names = function (a) {
+    return function () {
+      return Array.from(new Set(k[a].map(keyName))).reduce(function (acc, n) { return acc ? T('{a} or {b}', { a: acc, b: n }) : n; }, '');
+    };
+  };
+  const dirs = ['penLeft', 'penRight', 'penUp', 'penDown'].map(names);
+  return [
+    [function () { return dirs.map(function (f) { return f(); }).join(' '); }, L('Move the pen')],
+    [L('{keys} + move', { keys: names('penFast') }), L('Move the pen faster')],
+    [names('penToggle'), L('Pen down / pen up (draw)')],
+    [names('release'), L('Release the storm')],
+    [names('undo'), L('Undo last stroke')],
+    [names('hint'), L('Hint')],
+    [names('skip'), L('Skip storm playback')],
+    [names('pause'), L('Pause / resume')],
+    [function () { return keyName('Enter'); }, L('Confirm default button')],
+    [names('camera'), L('Reset camera framing')],
+    [L('Gamepad dpad/stick'), L('Move the pen')],
+    [L('Gamepad A / B / Start'), L('Draw or confirm / cancel / pause')]
+  ];
 }
 const PEN_STEP = 14, PEN_STEP_FAST = 42;
 
@@ -77,17 +88,27 @@ function persist() {
 const platform = GSPlatform.createPlatform({
   onSyncStatus: function () { updateSyncLine(); },
   // Renewal refused: keep playing on the local save; the title re-offers sign-in.
-  onSignedOut: function () { updateSyncLine(); if (ui) ui.toast(platformStrings().signedOut); if (appState === 'title') toTitle(); }
+  // Cloud-save conflict: merge the other device's progress with ours (best of
+  // each record), keep this device's settings and current round, save again.
+  onConflict: function (remote) {
+    const migrated = remote ? GSStore.migrate(remote) : null;
+    if (migrated) progress = GSStore.mergeProgress(migrated.progress, progress);
+    doc.progress = progress;
+    persist();
+  },
+  onSignedOut: function () { updateSyncLine(); if (ui) ui.toast(platformStrings(window.GSI18N.lang).signedOut); if (appState === 'title') toTitle(); }
 });
-let syncLineText = 'Offline — progress is saved on this device';
+let syncLineText = L('Offline — progress is saved on this device');
 function updateSyncLine() {
   if (platform.hosted()) {
-    const syncText = { saving: 'Cloud save: saving…', synced: 'Cloud save: synced',
-      error: 'Cloud save: offline — will retry', offline: 'Cloud save: offline' };
-    syncLineText = 'Signed in as ' + platform.displayName() + '  ·  ' +
-      (syncText[platform.syncStatus()] || syncText.offline);
+    const syncText = { saving: L('Cloud save: saving…'), synced: L('Cloud save: synced'),
+      error: L('Cloud save: offline — will retry'), offline: L('Cloud save: offline') };
+    syncLineText = L('Signed in as {name}  ·  {status}', {
+      name: function () { return platform.displayName(); },
+      status: syncText[platform.syncStatus()] || syncText.offline
+    });
   } else {
-    syncLineText = 'Offline — progress is saved on this device';
+    syncLineText = L('Offline — progress is saved on this device');
   }
   if (ui) ui.updateSyncStatus(syncLineText);
 }
@@ -148,14 +169,25 @@ function haptic() { if (settings.haptics && navigator.vibrate) navigator.vibrate
 // ---------- mode meta ----------
 function modeMeta(cfg) {
   switch (cfg.kind) {
-    case 'journey': return { mode: 'journey', ranked: true, board: 'journey-' + cfg.id, label: 'Journey stage ' + (cfg.index + 1) };
-    case 'daily': return { mode: 'daily', ranked: true, board: 'daily-' + cfg.date, label: 'Daily challenge' };
-    case 'practice': return { mode: 'practice', ranked: false, board: null, label: 'Practice' };
-    case 'challenge': return { mode: 'challenge', ranked: true, board: 'challenge-' + cfg.id, label: 'Challenge' };
-    case 'score': return { mode: 'storm', ranked: true, board: 'storm', label: 'Tempest Stand' };
-    case 'tutorial': return { mode: 'tutorial', ranked: false, board: null, label: 'Learn' };
-    default: return { mode: 'practice', ranked: false, board: null, label: cfg.kind || 'Round' };
+    case 'journey': return { mode: 'journey', ranked: true, board: 'journey-' + cfg.id, label: L('Journey stage {n}', { n: cfg.index + 1 }) };
+    case 'daily': return { mode: 'daily', ranked: true, board: 'daily-' + cfg.date, label: L('Daily challenge') };
+    case 'practice': return { mode: 'practice', ranked: false, board: null, label: L('Practice') };
+    case 'challenge': return { mode: 'challenge', ranked: true, board: 'challenge-' + cfg.id, label: L('Challenge') };
+    case 'score': return { mode: 'storm', ranked: true, board: 'storm', label: L('Tempest Stand') };
+    case 'tutorial': return { mode: 'tutorial', ranked: false, board: null, label: L('Learn') };
+    default: return { mode: 'practice', ranked: false, board: null, label: L('Round') };
   }
+}
+
+// Display name of a round (a message): content names are translation keys;
+// practice and daily names are composed.
+function cfgName(cfg) {
+  if (cfg.kind === 'practice') {
+    const base = GSContent.PRACTICE.find(function (p) { return 'practice-' + p.id === cfg.id; });
+    if (base) return L('{name} practice', { name: L(base.name) });
+  }
+  if (cfg.kind === 'daily') return L('Daily {date}', { date: cfg.date });
+  return L(cfg.name);
 }
 
 // ---------- level lifecycle ----------
@@ -194,7 +226,7 @@ function beginLevel(cfg, opts) {
   });
   if (session.lesson) showLessonCard();
   updateHUD();
-  updateMirror('level started');
+  updateMirror(L('level started'));
   transition('active', 'draw phase open');
   startPresence();
   telemetry('start');
@@ -202,7 +234,7 @@ function beginLevel(cfg, opts) {
 
 function objectiveText() {
   const n = session ? session.cfg.creatures.length : 1;
-  return 'Protect ' + (n > 1 ? n + ' wisps' : 'Wisp') + ' — draw barriers, then Release';
+  return n > 1 ? L('Protect {n} wisps — draw barriers, then Release', { n: n }) : L('Protect Wisp — draw barriers, then Release');
 }
 
 function restartLevel() {
@@ -232,7 +264,7 @@ function onInvalid(reason) {
   if (session) session.invalid++;
   sfx('invalid');
   ui.toastReason(reason);
-  updateMirror('invalid: ' + reason);
+  updateMirror(L('invalid: {reason}', { reason: reasonText(reason) }));
 }
 
 function elapsedMs() { return performance.now() - (session ? session.startPerf : 0); }
@@ -251,14 +283,14 @@ function commitStroke(points) {
     if (renderer) renderer.addStroke(st.pts, session.state.strokes.length - 1);
     lessonEvent('stroke');
     updateHUD();
-    updateMirror('stroke ' + st.len + 'u');
+    updateMirror(L('stroke of {len} ink', { len: st.len }));
   }
 }
 
 function undoStroke() {
   if (!session || !session.cfg.mechanics.undo || session.state.phase !== 'draw' || session.state.terminal) return;
   const strokes = session.commands.filter(function (c) { return c.type === 'stroke'; });
-  if (!strokes.length) { ui.toast('Nothing to undo'); return; } // not a rejected command: no invalid mark
+  if (!strokes.length) { ui.toast(L('Nothing to undo')); return; } // not a rejected command: no invalid mark
   // replay commands minus the last stroke
   const kept = session.commands.slice();
   for (let i = kept.length - 1; i >= 0; i--) {
@@ -279,23 +311,23 @@ function undoStroke() {
   sfx('undo');
   lessonEvent('undo');
   updateHUD();
-  updateMirror('undo');
+  updateMirror(L('undo'));
 }
 
 function showHintNow() {
   if (!session || !session.cfg.mechanics.hint || session.state.phase !== 'draw' || session.state.terminal) return;
   const h = GSRules.hint(session.state); // expensive: on demand only
-  if (!h) { ui.toast('No hint available'); return; }
+  if (!h) { ui.toast(L('No hint available')); return; }
   sfx('hint');
   if (renderer) renderer.showHint(h.strokes);
-  ui.announce('Hint shown: ' + (h.wouldWin ? 'a shield that should hold' : 'a best-effort shield') + ', ' + h.len + ' ink.');
+  ui.announce(L(h.wouldWin ? 'Hint shown: a shield that should hold, {ink} ink.' : 'Hint shown: a best-effort shield, {ink} ink.', { ink: h.len }));
 }
 
 function doRelease() {
   if (!session || session.state.phase !== 'draw' || session.state.terminal) return;
   if (settings.confirmRelease && !releaseArmed) {
     releaseArmed = true;
-    ui.toast('Tap Release again to confirm');
+    ui.toast(L('Tap Release again to confirm'));
     setTimeout(function () { releaseArmed = false; }, 2500);
     return;
   }
@@ -306,7 +338,7 @@ function doRelease() {
   sfx('release');
   transition('resolving', 'released');
   updateHUD();
-  updateMirror('storm released');
+  updateMirror(L('storm released'));
   const won = session.state.terminal && session.state.terminal.won;
   const simEvents = res.events.filter(function (e) { return e.tick != null; });
   spawnTypeById = {};
@@ -337,7 +369,7 @@ function onTraceEvent(ev) {
     sfx('hit');
     haptic();
   }
-  updateMirror('storm: ' + ev.type);
+  updateMirror(L('storm: {event}', { event: STORM_EVENT[ev.type] || ev.type }));
 }
 
 function skipPlayback() {
@@ -437,9 +469,9 @@ function showResults(won, entries, boardLabel) {
   const st = session.state;
   const stars = GSRules.starsFor(st);
   let headline;
-  if (st.terminal.reason === GSRules.TERMINAL.SURVIVED) headline = 'Saved!';
-  else if (st.terminal.reason === GSRules.TERMINAL.HIT) headline = 'Hit at ' + ((st.sim.survivedTicks / 60).toFixed(1)) + 's';
-  else headline = 'Resigned';
+  if (st.terminal.reason === GSRules.TERMINAL.SURVIVED) headline = L('Saved!');
+  else if (st.terminal.reason === GSRules.TERMINAL.HIT) headline = L('Hit at {s}s', { s: (st.sim.survivedTicks / 60).toFixed(1) });
+  else headline = L('Resigned');
 
   let best = null, isNewBest = false;
   if (session.mode === 'journey') best = progress.journeyBest[session.cfg.id];
@@ -484,17 +516,19 @@ function postHighScore(total) {
   const line = document.getElementById('results-lb');
   if (!line) return;
   if (!platform.hosted() || session.mode === 'tutorial') { line.hidden = true; return; }
-  const ps = platformStrings();
   line.hidden = false;
-  line.textContent = ps.lbPosting;
+  window.GSI18N.setText(line, function () { return platformStrings().lbPosting; });
   platform.postHighScore(Math.max(0, Math.round(total))).then(function (r) {
-    line.textContent = !r.posted ? ps.lbNotPosted : r.rank ? ps.lbRank.replace('{rank}', r.rank) : ps.lbPosted;
+    window.GSI18N.setText(line, function () {
+      const ps = platformStrings();
+      return !r.posted ? ps.lbNotPosted : r.rank ? ps.lbRank.replace('{rank}', r.rank) : ps.lbPosted;
+    });
   });
 }
 
 function copySeed() {
   const text = 'guardian-sketch ' + session.mode + ' seed ' + session.cfg.seed;
-  if (navigator.clipboard) navigator.clipboard.writeText(text).then(function () { ui.toast('Seed copied'); }, function () { ui.toast(text); });
+  if (navigator.clipboard) navigator.clipboard.writeText(text).then(function () { ui.toast(L('Seed copied')); }, function () { ui.toast(text); });
   else ui.toast(text);
 }
 
@@ -552,12 +586,12 @@ async function submitScore(envelope, done) {
   const local = GSStore.sortEntries(localEntries(board)).map(function (e) {
     return Object.assign({}, e, { self: e.sessionId === sessionId });
   });
-  const finishLocal = function () { done(local.slice(0, 10), 'casual (unvalidated)'); };
+  const finishLocal = function () { done(local.slice(0, 10), L('casual (unvalidated)')); };
   if (platform.hosted()) {
     // Platform leaderboards are server-owned: clients read, never submit.
     // Personal-best records stay local and are mirrored by the cloud save.
     const entries = await platform.hostedBoardEntries();
-    if (entries && entries.length) done(entries.slice(0, 10), 'global');
+    if (entries && entries.length) done(entries.slice(0, 10), L('global'));
     else finishLocal();
     return;
   }
@@ -754,7 +788,7 @@ function pauseGame(reason) {
   if (renderer) renderer.pauseTrace(); // freeze storm playback at its exact tick
   sfx('pause');
   ui.showPause();
-  updateMirror('paused');
+  updateMirror(L('paused'));
 }
 function resumeGame() {
   if (appState !== 'paused') return;
@@ -812,16 +846,21 @@ function updateHUD() {
 }
 setInterval(updateHUD, 250);
 
+const STORM_EVENT = { spawn: L('hazard spawned'), block: L('hazard blocked'), bounce: L('bounce'), hit: L('wisp hit') };
+const PHASE_NAME = { draw: L('drawing'), done: L('finished'), storm: L('storm') };
 function updateMirror(lastEvent) {
   if (!settings.boardMirror || !session) { ui.setBoardMirror(null); return; }
   const st = session.state;
+  const phase = appState === 'resolving' ? 'storm' : st.phase;
   ui.setBoardMirror([
-    'Phase: ' + (appState === 'resolving' ? 'storm' : st.phase),
-    'Strokes: ' + st.strokes.length + ' / ' + st.cfg.ink.maxStrokes,
-    'Ink left: ' + Math.round(inkLeft()),
-    'Creatures: ' + st.cfg.creatures.map(function (c, i) { return 'wisp ' + (i + 1) + ' at ' + c.x + ',' + c.y; }).join('; '),
-    'Emitters: ' + st.cfg.emitters.length,
-    'Last: ' + (lastEvent || '—')
+    L('Phase: {phase}', { phase: PHASE_NAME[phase] || phase }),
+    L('Strokes: {n} / {max}', { n: st.strokes.length, max: st.cfg.ink.maxStrokes }),
+    L('Ink left: {n}', { n: Math.round(inkLeft()) }),
+    L('Creatures: {list}', { list: function () {
+      return st.cfg.creatures.map(function (c, i) { return T('wisp {n} at {x},{y}', { n: i + 1, x: c.x, y: c.y }); }).join('; ');
+    } }),
+    L('Emitters: {n}', { n: st.cfg.emitters.length }),
+    L('Last: {event}', { event: lastEvent || '—' })
   ]);
 }
 
@@ -857,7 +896,7 @@ function lessonEvent(eventName) {
       session.newAchievements = [GSContent.ACHIEVEMENTS.find(function (a) { return a.key === 'lessons-done'; })];
     }
     persist();
-    ui.celebrateLearn('Lesson complete! ' + session.lesson.title);
+    ui.celebrateLearn(L('Lesson complete! {title}', { title: L(session.lesson.title) }));
     sfx('lesson');
     setTimeout(function () {
       if (session && session.lesson) startLesson(session.lessonIdx + 1);
@@ -880,7 +919,7 @@ function toTitle() {
     syncText: syncLineText,
     canSignIn: platform.canSignIn(),
     signedIn: platform.hosted(),
-    compatWarning: glOk ? null : 'WebGL is unavailable — menus work, but the 3D page cannot be shown.'
+    compatWarning: glOk ? null : L('WebGL is unavailable — menus work, but the 3D page cannot be shown.')
   });
   updateMirror(null);
 }
@@ -890,7 +929,7 @@ function nextDailyText() {
   const next = Math.floor(now / 86400000) * 86400000 + 86400000;
   const s = Math.max(0, Math.floor((next - now) / 1000));
   const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
-  return 'Next daily in ' + h + ':' + String(m).padStart(2, '0') + ':' + String(sec).padStart(2, '0');
+  return L('Next daily in {time}', { time: h + ':' + String(m).padStart(2, '0') + ':' + String(sec).padStart(2, '0') });
 }
 setInterval(function () { if (appState === 'title') ui.updateDailyCountdown(nextDailyText()); }, 1000);
 
@@ -905,7 +944,7 @@ function confirmAndStart(cfg, extra) {
   const meta = modeMeta(cfg);
   transition('mode-select', 'setup ' + meta.mode);
   ui.showModeSetup({
-    title: cfg.name,
+    title: cfgName(cfg),
     cfg: cfg,
     ranked: meta.ranked,
     modeLabel: meta.label,
@@ -933,7 +972,7 @@ async function openDaily() {
     dailyCfgCache = cfg;
   }
   const done = progress.dailiesDone[date];
-  confirmAndStart(cfg, { note: done != null ? 'Already played today (score ' + done + ') — replay to improve.' : null });
+  confirmAndStart(cfg, { note: done != null ? L('Already played today (score {score}) — replay to improve.', { score: done }) : null });
 }
 
 function openJourney() {
@@ -995,7 +1034,7 @@ function applySettings(next) {
   persist();
   ui.applySettingsClasses(settings);
   GSAudio.applySettings(settings);
-  GSAudio.setCaptions(settings.captions, function (text) { ui.caption(text); });
+  GSAudio.setCaptions(settings.captions, function (text) { ui.caption(T(text)); }); // captions are keys in strings.js
   if (renderer) {
     renderer.setGraphics(settings.graphics);
     renderer.setReducedMotion(settings.reducedMotion);
@@ -1006,7 +1045,7 @@ function applySettings(next) {
     }
   }
   if (session) updateHUD();
-  updateMirror('settings applied');
+  updateMirror(L('settings applied'));
   telemetry('settings-change');
 }
 
@@ -1024,7 +1063,7 @@ function openSettings() {
       persist();
       applySettings(settings);
       toTitle();
-      ui.toast('Save data reset');
+      ui.toast(L('Save data reset'));
     }
   });
 }
@@ -1034,9 +1073,9 @@ let scoresTab = 'global', scoresBoard = 'storm';
 function openScores() {
   const date = todayStr();
   const boards = [
-    { id: 'storm', label: 'Tempest Stand' },
-    { id: 'daily-' + date, label: 'Daily ' + date }
-  ].concat(GSContent.CHALLENGES.map(function (c) { return { id: 'challenge-' + c.id, label: c.name }; }));
+    { id: 'storm', label: L('Tempest Stand') },
+    { id: 'daily-' + date, label: L('Daily {date}', { date: date }) }
+  ].concat(GSContent.CHALLENGES.map(function (c) { return { id: 'challenge-' + c.id, label: L(c.name) }; }));
   function render(entries, emptyText) {
     ui.showScores({
       boards: boards, board: scoresBoard, tab: scoresTab, entries: entries, emptyText: emptyText,
@@ -1045,19 +1084,19 @@ function openScores() {
     });
   }
   if (scoresTab === 'device') {
-    render(GSStore.sortEntries(localEntries(scoresBoard)), 'No local entries for this board yet.');
+    render(GSStore.sortEntries(localEntries(scoresBoard)), L('No local entries for this board yet.'));
   } else if (platform.hosted()) {
     // Global tab: read-only platform leaderboard; local records when the
     // game has no leaderboard on-platform.
     const board = scoresBoard;
     platform.hostedBoardEntries().then(function (entries) {
       if (board !== scoresBoard) return;
-      if (entries && entries.length) render(entries, 'No entries yet.');
-      else render(GSStore.sortEntries(localEntries(board)), 'No scores on this device for this board yet.');
+      if (entries && entries.length) render(entries, L('No entries yet.'));
+      else render(GSStore.sortEntries(localEntries(board)), L('No scores on this device for this board yet.'));
     });
   } else {
     // Offline the global tab shows this device's records.
-    render(GSStore.sortEntries(localEntries(scoresBoard)), 'No scores on this device for this board yet.');
+    render(GSStore.sortEntries(localEntries(scoresBoard)), L('No scores on this device for this board yet.'));
   }
 }
 
@@ -1101,7 +1140,7 @@ async function boot() {
     onInvite: async function () {
       const link = platform.inviteLink();
       if (!link) return;
-      const ps = platformStrings();
+      const ps = platformStrings(window.GSI18N.lang);
       try { await navigator.clipboard.writeText(link); ui.toast(ps.inviteCopied); } catch (e) { ui.toast(ps.inviteFailed); }
     },
     onOpenSettings: openSettings,
@@ -1125,9 +1164,9 @@ async function boot() {
 
   if (glOk) {
     renderer = createRenderer(canvasWrap, {
-      onUnsupported: function () { ui.toast('WebGL unavailable'); },
+      onUnsupported: function () { ui.toast(L('WebGL unavailable')); },
       onContextLost: function () {
-        ui.toast('Graphics context lost — attempting recovery');
+        ui.toast(L('Graphics context lost — attempting recovery'));
         telemetry('error-category');
       }
     });
@@ -1153,5 +1192,12 @@ async function boot() {
   transition('profile-ready', platform.hosted() ? 'hosted profile loading' : 'guest profile loaded');
   toTitle();
 }
+
+// Language changes: bound UI text re-renders itself; refresh what is computed here.
+document.addEventListener('gs-language', function () {
+  if (!ui) return;
+  if (session) updateHUD();
+  if (appState === 'title') ui.updateDailyCountdown(nextDailyText());
+});
 
 boot();

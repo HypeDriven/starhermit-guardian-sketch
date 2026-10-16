@@ -19,7 +19,9 @@ File map (everything that ships or matters):
 
 | Path | Responsibility |
 |---|---|
-| `index.html` | Entry point; loads UMD globals (`GSRNG`, `GSRules`, `GSContent`, `GSStore`, `GSPlatform`, `GSAudio`) then `js/main.js` as a module |
+| `index.html` | Entry point; loads `sh-language.js`, `js/strings.js`, `js/i18n.js`, then UMD globals (`GSRNG`, `GSRules`, `GSContent`, `GSStore`, `GSPlatform`, `GSAudio`), then `js/main.js` as a module |
+| `sh-language.js` | Shared StarHermit language preference (`window.StarHermitLanguage`), an unmodified copy of the games repo's `tools/sh-language.js` |
+| `js/strings.js`, `js/i18n.js` | Translation tables (English source strings as keys) and the localization runtime `window.GSI18N` (`T`, deferred `L` messages, in-place re-rendering, `gs-language` event) |
 | `js/rng.js` | mulberry32 PRNG, FNV-1a string hash, three derived streams (rules / decor / av) |
 | `js/rules.js` | State, legality, fixed-step hazard simulation, scoring, stars, hint search, replay validation, serialization |
 | `js/content.js` | Hazard types, 5 themes, 40 journey stages, 6 challenges, 3 practice presets, Tempest Stand generator, daily generator, 5 lessons, 9 achievements |
@@ -27,11 +29,11 @@ File map (everything that ships or matters):
 | `js/audio.js` | WebAudio buses, procedural fallbacks, lazy Opus sample playback from `sfx/manifest.json`, ambience and generative pad |
 | `js/render.js` | Three.js scene: desk, page, wisps, obstacles, emitters, tube strokes, pooled hazards, particles, dust motes, trace playback, graphics settings (lighting, IBL, post-processing chain, adaptive resolution) |
 | `js/gfx.js` | Pure graphics quality model: presets, categories, GPU detection, `resolve`, `presetTier`, `choosePreset`, `describe` |
-| `js/gfx-i18n.js` | Graphics-panel strings in en-US, en-GB, es-419, es-ES, de-DE, fr-FR, fr-CA, pt-BR, it-IT, picked from the browser language |
+| `js/gfx-i18n.js` | Graphics-panel strings in en-US, en-GB, es-419, es-ES, de-DE, fr-FR, fr-CA, pt-BR, it-IT, in the game's current language |
 | `vendor/three-addons/` | three r170 addons (EffectComposer, RenderPass, GTAO, UnrealBloom, SMAA, Output/Shader passes, FXAA, RoomEnvironment and their shader/math imports), importmap prefix `three/addons/` |
 | `js/ui.js` | DOM shell: title, setup, journey grid, HUD/tray, pause, settings, results, help, learn card, scores, live regions, toasts, captions, board mirror |
 | `js/main.js` | App state machine, session/commands, input (pointer, keyboard pen, gamepad), progression, replay envelope, StarHermit account wiring, boot |
-| `js/platform.js` | StarHermit glue over the shared SDK: launch token, profile nickname, `game:<slug>` cloud-save mirror (debounced + pagehide flush, remote-preferred load), settings KV, key bindings, sign-in, invite link, hosted read-only boards |
+| `js/platform.js` | StarHermit glue over the shared SDK: launch token, profile nickname, `game:<slug>` cloud-save mirror (debounced + pagehide flush, remote-preferred load, conflict reload), settings KV, key bindings, sign-in, invite link, hosted read-only boards |
 | `css/main.css` | Complete stylesheet, responsive rules, safe areas, accessibility body classes |
 | `score-script.js` | StarHermit platform script (`server=score-script.js`): range-checks a finished round's total and posts it to the `high-score` leaderboard (canonical copy in the games repo's `tools/score-script.js`) |
 | `server.js` | Local Node host: static files plus legacy `/api/v1/*` routes (replay-validated score submission) the client no longer calls |
@@ -40,6 +42,7 @@ File map (everything that ships or matters):
 | `sfx/` | 21 Opus clips; `manifest.txt` (canonical binding), `manifest.json` (generator entries), `manifest.md` (generated listing) |
 | `tests/run.js` | `npm test`: 73 rules/content/server/store/platform checks, zero dependencies |
 | `tests/gfx.test.mjs` | `npm test` (second half, `node --test`): graphics model, locale coverage, legacy quality-tier migration |
+| `tests/platform.test.mjs`, `tests/i18n.test.mjs` | `npm test`: platform glue on the real SDK (incl. save-conflict merge); every used string key translated in all nine locales, live language switching |
 | `tests/e2e.mjs` | `npm run test:e2e`: Playwright playthrough on desktop and mobile viewports |
 | `starhermit.txt`, `coverart.png`, `icon.png`, `favicon.svg`, `LICENSE.md` | Platform manifest, cover, icons, PolyForm Noncommercial 1.0.0 |
 
@@ -221,7 +224,12 @@ SFX event table (the source for `sfx/manifest.txt`):
 
 ## 10. Localization
 
-Shipping language: **English only** (en-US strings; the same text serves en-GB), except the Graphics settings controls (`js/gfx-i18n.js`) and the StarHermit account strings (`js/platform-i18n.js`), which follow the browser language in all nine required locales. All player-facing strings are literals in `js/ui.js` (labels, panels, invalid reasons), `js/main.js` (objective, headlines, toasts, bindings) and `js/content.js` (stage names, intros, lessons, achievements). There is no locale file, no language selector, and `<html lang="en">` is fixed. Layout already tolerates ~30 % longer strings: buttons wrap in a grid, panels scroll, the tray wraps on narrow screens, and the HUD objective is a single flexible line. The required set (en-US, en-GB, es-419, es-ES, de-DE, fr-FR, fr-CA, pt-BR, it-IT) is listed as unimplemented intent in section 17.
+Nine locales ship: **en-US, en-GB, es-419, es-ES, de-DE, fr-FR, fr-CA, pt-BR, it-IT**. Every player-facing string — title, menus, setup, HUD and tray, pause, settings, results, help, lessons, scores, board-state panel, toasts, captions, and the content names and texts in `js/content.js` (hazards, themes, stages, intros, challenges, practice presets, lessons, achievements) — is an English key in `js/strings.js` with es-419, de-DE, fr-FR, pt-BR and it-IT translations; en-GB, es-ES and fr-CA carry only their differences (e.g. "Colour palette", "Ajustes", "Sauvegarde infonuagique") and otherwise inherit en-US, es-419 and fr-FR. The Graphics controls (`js/gfx-i18n.js`) and the StarHermit account strings (`js/platform-i18n.js`) have their own tables in the same nine locales. "Guardian Sketch", "StarHermit" and the creature's name "Wisp" are not translated; numbers stay plain digits.
+
+- **Language setting:** Settings → **Language → Game language** (rendered by the shared `game-options.js` panel inside the Graphics section, reachable from the title and from Pause → Settings) offers **Automatic — <resolved language>** plus the nine locales by native name, with a status line (Saved to account / Saved on this device / Account sync unavailable).
+- **Resolution** (`sh-language.js`): explicit game choice → for Automatic, the StarHermit account's `preferredLanguage` (`GET /api/v1/me/language`, signed in only) → `navigator.languages` → en-US; tags map to the nearest shipped locale (`es-MX → es-419`, `en-AU → en-GB`, `fr → fr-FR`). The choice (`auto` or a locale) is stored per player in `localStorage['guardian-sketch.language.<user|guest>']` and, signed in, in the per-player settings key `ui.language` as `{ choice }`; a failed settings read never overwrites it and the game never writes the platform preference. `?lang=<tag>` forces a locale for the page load (QA links) and hides the selector.
+- **Live switching:** UI text is built from deferred messages (`GSI18N.L`), so a change re-renders every visible node in place — open panels (including Settings and Pause), the HUD and tray, title lines, tooltips and aria-labels — and sets `<html lang>`; the Graphics box redraws only its own controls; the round, its strokes and the storm playback are untouched.
+- **Layout:** buttons wrap in a grid (long single words break rather than clip), panels scroll, the tray wraps on narrow screens, and the HUD objective wraps; German and Portuguese fit at 390 px wide.
 
 ## 11. Accessibility
 
@@ -240,8 +248,10 @@ Manifest `starhermit.txt`: `name=Guardian Sketch`, `launch=index.html`, `owner=�
 Used:
 - **Launch token:** the SDK reads `#game_token=<jwt>[&session_id=]` (library launch) or `#access_token=<jwt>` (sign-in return), strips it via `history.replaceState`, takes `sub` / `game_scope` (slug never hard-coded), sends `Authorization: Bearer` on every same-origin call and renews the token before expiry. If renewal is refused the title sync line returns to offline, a toast says progress keeps saving on this device, and sign-in is offered again where available. Hosted mode is active iff a token is held.
 - **Sign-in and invites:** on `<slug>.starhermit.com` without a token the title shows **Sign in with StarHermit**; signed in it shows **Invite a friend**, which copies the SDK share link with a toast. Both are localized in the nine locales (`js/platform-i18n.js`).
-- **Identity:** hosted, the display name is the profile nickname (`"Player " + id` fallback; never `/api/v1/me`, never usernames), shown in the title sync line and on leaderboard entries. Offline keeps the generated `guest-xxxx` name.
-- **Cloud save:** hosted, the save doc `{v, settings, progress}` mirrors to slot `game:<slug>` (`/api/v1/me/cloud-saves/game:<slug>`). At boot the slot info is checked and the remote copy wins; an empty slot is seeded from the local doc; saves debounce ~2 s and flush on `pagehide`/hidden; the title sync line shows signed-in name · saving/synced/error. localStorage remains the offline cache.
+- **Identity:** hosted, the display name is the profile nickname (localized "Player <id>" fallback; never `/api/v1/me`, never usernames), shown in the title sync line and on leaderboard entries. Offline keeps the generated `guest-xxxx` name.
+- **Cloud save:** hosted, the save doc `{v, settings, progress}` mirrors to slot `game:<slug>` (`/api/v1/me/cloud-saves/game:<slug>`). At boot the slot is read through `StarHermit.loadJSON` and the remote copy wins; an empty slot is seeded from the local doc; saves debounce ~2 s and flush on `pagehide`/hidden; the title sync line shows signed-in name · saving/synced/error. localStorage remains the offline cache. Writes are conditional on the version last read: when another device saved first (`saveconflict`), the game reloads the cloud doc and merges it — highest stars and best score per stage, best challenge/daily/Tempest Stand scores, largest stats, the union of lessons and achievements (earliest unlock time), this device's settings and current round — then saves the merged doc.
+- **Reports:** signed in, Settings → **Report a problem** (from `game-options.js`) files a bug report through `StarHermit.reportBug` with a small non-personal `context.json`; uncaught errors are filed as crash reports through `StarHermit.captureCrashes` (capped by the SDK).
+- **Language:** the `ui.language` per-player setting and the account's preferred language drive the game language (section 10).
 - **Settings KV:** hosted, the preferences (volumes, mute, captions, graphics, theme, reduced motion, high contrast, palette, large text, left-handed, haptics, board mirror, confirm-release) are patched whenever a persist changes them, and the platform values are applied at boot.
 - **Controls:** keyboard input is routed by `KeyboardEvent.code` through `StarHermit.loadBindings` (`penLeft/Right/Up/Down`, `penFast`, `penToggle`, `release`, `undo`, `hint`, `skip`, `pause`, `camera`); Help lists the effective keys.
 - **Leaderboards:** hosted, clients never submit — the global board is read-only (`GET /api/v1/games/{slug}` → `leaderboardId` → entries) with userIds resolved to nicknames; without a board, and always offline, the Scores screen shows on-device records labelled "casual (unvalidated)". Personal bests live in the save doc (local + cloud).
@@ -300,7 +310,6 @@ QA bar (checkable): every feature reachable by clicks/taps; no console errors or
 
 ## 17. Design intent not yet implemented
 
-- Localization to en-GB, es-419, es-ES, de-DE, fr-FR, fr-CA, pt-BR and it-IT with a string table and language selection from the host locale.
 - Friends-filtered platform leaderboards (the hosted global board is read-only per the platform contract; there is no client submission path).
 - Idempotent achievement delivery through the platform (achievements are local today; `score-script.js` has no unlock path).
 - A high-visibility hazard palette bound to the existing setting.

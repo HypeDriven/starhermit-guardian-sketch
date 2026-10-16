@@ -117,8 +117,43 @@
     });
   }
 
+  // ---------- cloud-save conflict merge ----------
+  // Another device saved since this one last loaded: keep the better value of
+  // every record (stars, bests, dailies, storm best, stats), the union of
+  // lessons and achievements (earliest unlock time), and this device's
+  // cosmetics. Neither side's progress is dropped.
+  function maxMap(a, b) {
+    var out = {}, k;
+    a = a || {}; b = b || {};
+    for (k in a) if (typeof a[k] === 'number') out[k] = a[k];
+    for (k in b) if (typeof b[k] === 'number') out[k] = k in out ? Math.max(out[k], b[k]) : b[k];
+    return out;
+  }
+  function mergeProgress(remote, local) {
+    var r = migrate({ v: SAVE_VERSION, progress: remote || {} }).progress;
+    var l = migrate({ v: SAVE_VERSION, progress: local || {} }).progress;
+    var ach = {}, k;
+    for (k in r.achievements) ach[k] = r.achievements[k];
+    for (k in l.achievements) ach[k] = k in ach ? Math.min(ach[k], l.achievements[k]) : l.achievements[k];
+    var tut = {};
+    for (k in r.tutorialDone) if (r.tutorialDone[k]) tut[k] = true;
+    for (k in l.tutorialDone) if (l.tutorialDone[k]) tut[k] = true;
+    return {
+      tutorialDone: tut,
+      journeyStars: maxMap(r.journeyStars, l.journeyStars),
+      journeyBest: maxMap(r.journeyBest, l.journeyBest),
+      challengeBest: maxMap(r.challengeBest, l.challengeBest),
+      dailiesDone: maxMap(r.dailiesDone, l.dailiesDone),
+      stormBest: Math.max(r.stormBest || 0, l.stormBest || 0),
+      achievements: ach,
+      stats: maxMap(r.stats, l.stats),
+      cosmetics: l.cosmetics || r.cosmetics
+    };
+  }
+
   return {
     SAVE_VERSION: SAVE_VERSION,
+    mergeProgress: mergeProgress,
     DEFAULT_SETTINGS: DEFAULT_SETTINGS,
     load: load, save: save, fresh: fresh, migrate: migrate,
     checksum: checksum,

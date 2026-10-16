@@ -1,6 +1,6 @@
 /* Guardian Sketch — strings for the Graphics settings section (ES module).
- * The rest of the game ships in English; these controls follow the browser
- * language (en-US, en-GB, es-419, es-ES, de-DE, fr-FR, fr-CA, pt-BR, it-IT).
+ * These controls follow the game's Language setting (en-US, en-GB, es-419,
+ * es-ES, de-DE, fr-FR, fr-CA, pt-BR, it-IT); the rest of the UI lives in strings.js.
  */
 
 const EN = {
@@ -153,7 +153,10 @@ export function pickLocale(tag) {
   return 'en-US';
 }
 
+// The game's current language (Language setting, via window.GSI18N); the
+// browser language only when the localization runtime is absent (tests).
 function browserLocale() {
+  if (typeof window !== 'undefined' && window.GSI18N) return window.GSI18N.lang;
   try { return (navigator.languages && navigator.languages[0]) || navigator.language; } catch (e) { return 'en-US'; }
 }
 

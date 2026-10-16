@@ -61,6 +61,13 @@
     }
     if (sh) {
       sh.on('saved', function (ok) { setSync(ok ? 'synced' : 'error'); });
+      // A write lost to a save made on another device (conditional write refused):
+      // reload the cloud copy and hand it to the game to merge and save again.
+      sh.on('saveconflict', function () {
+        sh.loadJSON().then(function (remote) {
+          if (hooks.onConflict) hooks.onConflict(remote && typeof remote === 'object' ? remote : null);
+        });
+      });
       // Renewal refused: local play continues on the local save.
       sh.on('auth', function (a) {
         if (a.signedIn) return;
@@ -70,9 +77,14 @@
     }
 
     /* ---------- account profile (nickname, "Player <id>" fallback; never /api/v1/me) ---------- */
+    function playerFallback(id) {
+      var short = String(id).slice(0, 6);
+      var i18n = typeof window !== 'undefined' && window.GSI18N;
+      return i18n ? i18n.T('Player {id}', { id: short }) : 'Player ' + short;
+    }
     async function nicknameFor(id) {
       var p = hosted() ? await sh.profile(String(id)).catch(function () { return null; }) : null;
-      return (p && p.displayName) || ('Player ' + String(id).slice(0, 6));
+      return (p && p.displayName) || playerFallback(id);
     }
     async function loadProfile() {
       if (!hosted()) return null;
@@ -83,7 +95,7 @@
     // null offline (the caller's guest name applies then).
     function displayName() {
       if (!hosted()) return null;
-      return nickname || ('Player ' + String(sh.userId).slice(0, 6));
+      return nickname || playerFallback(sh.userId);
     }
 
     /* ---------- cloud save (slot game:<slug>; localStorage stays the cache) ---------- */
@@ -94,11 +106,11 @@
     }
     function flushCloudSave() { return hosted() ? sh.flushSave(true) : Promise.resolve(false); }
     // Remote-preferred load: no slot (or any failure) keeps the local cache.
+    // Always read through the SDK (it checks /info itself) so later writes are
+    // conditional on the version read here.
     async function loadCloudSave() {
       if (!hosted()) return null;
       try {
-        var info = await sh.saveInfo();
-        if (info && info.exists === false) return null;
         var doc = await sh.loadJSON();
         if (doc && typeof doc === 'object' && doc.settings && doc.progress) { setSync('synced'); return doc; }
         return null;
