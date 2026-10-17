@@ -244,6 +244,7 @@ async function runPass(browser, name, contextOpts) {
       await page.getByLabel('Quality').selectOption('high');
       await page.waitForFunction(() => document.body.dataset.gfxPreset === 'high', null, { timeout: 15000 });
       await page.waitForFunction(() => /2048² shadows/.test(document.getElementById('gfx-summary')?.textContent || ''), null, { timeout: 15000 });
+      if (!/ · Level 0 · /.test(await page.textContent('#gfx-summary'))) throw new Error('summary lacks the hardware level: ' + await page.textContent('#gfx-summary'));
       if (!/From preset \(On\)/.test(await page.locator('#gfx-bloom option[value=preset]').textContent())) throw new Error('bloom preset label wrong');
       await page.locator('#gfx-bloom').selectOption('off');
       await page.waitForFunction(() => !/bloom/.test(document.getElementById('gfx-summary')?.textContent || ''), null, { timeout: 15000 });

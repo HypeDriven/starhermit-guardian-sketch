@@ -12,6 +12,7 @@ const EN = {
   showFps: 'Show frame rate',
   postFailed: 'Post-processing is unavailable on this device, so the game renders without it.',
   unknownGpu: 'unknown GPU',
+  level: 'Level {n}',
   cat: {
     shadows: 'Shadows', ao: 'Ambient occlusion', bloom: 'Bloom', grade: 'Color grade',
     antialias: 'Anti-aliasing', reflections: 'Reflections', detail: 'Surface detail',
@@ -35,6 +36,7 @@ const ES = {
   showFps: 'Mostrar fotogramas por segundo',
   postFailed: 'El posprocesado no está disponible en este dispositivo; el juego se muestra sin él.',
   unknownGpu: 'GPU desconocida',
+  level: 'Nivel {n}',
   cat: {
     shadows: 'Sombras', ao: 'Oclusión ambiental', bloom: 'Resplandor', grade: 'Corrección de color',
     antialias: 'Antialiasing', reflections: 'Reflejos', detail: 'Detalle de superficies',
@@ -57,6 +59,7 @@ const DE = {
   showFps: 'Bildrate anzeigen',
   postFailed: 'Nachbearbeitung ist auf diesem Gerät nicht verfügbar; das Spiel wird ohne sie dargestellt.',
   unknownGpu: 'unbekannte GPU',
+  level: 'Stufe {n}',
   cat: {
     shadows: 'Schatten', ao: 'Umgebungsverdeckung', bloom: 'Leuchten', grade: 'Farbkorrektur',
     antialias: 'Kantenglättung', reflections: 'Spiegelungen', detail: 'Oberflächendetails',
@@ -78,6 +81,7 @@ const FR = {
   showFps: 'Afficher la fréquence d’images',
   postFailed: 'Le post-traitement n’est pas disponible sur cet appareil ; le jeu s’affiche sans lui.',
   unknownGpu: 'GPU inconnu',
+  level: 'Niveau {n}',
   cat: {
     shadows: 'Ombres', ao: 'Occlusion ambiante', bloom: 'Halo lumineux', grade: 'Étalonnage des couleurs',
     antialias: 'Anticrénelage', reflections: 'Reflets', detail: 'Détail des surfaces',
@@ -100,6 +104,7 @@ const PT = {
   showFps: 'Mostrar taxa de quadros',
   postFailed: 'O pós-processamento não está disponível neste dispositivo; o jogo é exibido sem ele.',
   unknownGpu: 'GPU desconhecida',
+  level: 'Nível {n}',
   cat: {
     shadows: 'Sombras', ao: 'Oclusão ambiente', bloom: 'Brilho', grade: 'Correção de cor',
     antialias: 'Antisserrilhado', reflections: 'Reflexos', detail: 'Detalhe das superfícies',
@@ -121,6 +126,7 @@ const IT = {
   showFps: 'Mostra frequenza fotogrammi',
   postFailed: 'La post-elaborazione non è disponibile su questo dispositivo; il gioco viene mostrato senza.',
   unknownGpu: 'GPU sconosciuta',
+  level: 'Livello {n}',
   cat: {
     shadows: 'Ombre', ao: 'Occlusione ambientale', bloom: 'Bagliore', grade: 'Correzione colore',
     antialias: 'Antialiasing', reflections: 'Riflessi', detail: 'Dettaglio superfici',

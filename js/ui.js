@@ -538,7 +538,7 @@ export function createUI(root, handlers) {
       const summary = box.querySelector('#gfx-summary');
       const note = box.querySelector('#gfx-post-note');
       if (summary) {
-        summary.textContent = inf ? [inf.gpu || T.unknownGpu, inf.summary].join(' · ') : '';
+        summary.textContent = inf ? [inf.gpu || T.unknownGpu, inf.level != null ? fmt(T.level, { n: inf.level }) : null, inf.summary].filter(Boolean).join(' · ') : '';
         summary.dataset.gfxPreset = inf ? inf.resolved.preset : '';
       }
       if (note) note.hidden = !(inf && inf.postFailed);

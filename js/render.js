@@ -13,7 +13,7 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { SMAAPass } from 'three/addons/postprocessing/SMAAPass.js';
 import { FXAAShader } from 'three/addons/shaders/FXAAShader.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
-import { detectPreset, describe, resolve, SHADOW_MAP, PARTICLE_CAP } from './gfx.js';
+import { detectLevel, presetForLevel, describe, resolve, SHADOW_MAP } from './gfx.js';
 
 // ---------- framing constants (authored, not magic) ----------
 export const FRAMING = {
@@ -72,15 +72,36 @@ function gpuName(renderer) {
     return String(ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER) || '');
   } catch (e) { return ''; }
 }
-function touchDevice() {
-  try { return matchMedia('(pointer: coarse)').matches && !matchMedia('(any-pointer: fine)').matches; } catch (e) { return false; }
+// StarHermit hardware level (js/gpu-level.js) for this renderer string and device.
+function hardwareLevel(gpu) {
+  const G = globalThis.StarHermitGpu;
+  let system = {};
+  try { system = G ? G.detectSystem() : {}; } catch (e) { /* defaults */ }
+  return detectLevel(gpu, system);
+}
+
+// Lit-material classes per budget (gfx.js BUDGETS.material). Only 'physical' surfaces (ink, wisps,
+// hazards) use MeshPhysicalMaterial on High/Ultra; every surface is Standard on Balanced, Lambert on Low.
+const MAT_CLASS = { lambert: THREE.MeshLambertMaterial, standard: THREE.MeshStandardMaterial, physical: THREE.MeshPhysicalMaterial };
+function litMaterial(kind, physical, spec) {
+  const cls = kind === 'physical' ? (physical ? THREE.MeshPhysicalMaterial : THREE.MeshStandardMaterial) : MAT_CLASS[kind];
+  const m = new cls({ color: spec.color });
+  if (spec.emissive != null) { m.emissive.setHex(spec.emissive); m.emissiveIntensity = spec.emissiveIntensity || 1; }
+  if (m.isMeshStandardMaterial) {
+    m.roughness = spec.roughness != null ? spec.roughness : 1;
+    m.metalness = spec.metalness || 0;
+    if (spec.envMapIntensity != null) m.envMapIntensity = spec.envMapIntensity;
+  }
+  if (m.isMeshPhysicalMaterial && spec.sheenColor != null) m.sheenColor.setHex(spec.sheenColor);
+  return m;
 }
 
 // Procedural desk wood grain (greyscale, multiplied by the theme's desk colour).
-function woodTexture() {
+function woodTexture(size) {
   const c = document.createElement('canvas');
-  c.width = 512; c.height = 512;
+  c.width = c.height = size;
   const g = c.getContext('2d');
+  g.scale(size / 512, size / 512); // authored at 512 px
   g.fillStyle = '#d8d8d8'; g.fillRect(0, 0, 512, 512);
   let seed = 7;
   const rnd = function () { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
@@ -166,14 +187,28 @@ export function createRenderer(container, opts) {
   rim.target.position.set(PAGE_CX, PAGE_CY, 0);
   envGroup.add(key, key.target, hemi, rim, rim.target);
 
+  // ---------- lit materials (class per budget; rebuilt in place when the budget's class changes) ----------
+  // Physical surfaces (clearcoat/sheen via Surface detail) on High/Ultra; Standard on Balanced; Lambert on Low.
+  const LIT = {
+    desk: { color: 0x2b2f3a, roughness: 0.8, envMapIntensity: 0.35 },
+    page: { color: 0xf2ecdf, roughness: 0.9, envMapIntensity: 0.2 },
+    pageEdge: { color: 0xd8d0bc, roughness: 0.9 },
+    ink: { color: 0x2a2e38, roughness: 0.55, metalness: 0.05, envMapIntensity: 0.9, physical: true },
+    creature: { color: 0x3b4d8f, roughness: 0.5, emissive: 0x3b4d8f, emissiveIntensity: 0.12, sheenColor: 0xc8d4ff, physical: true },
+    eye: { color: 0x14161c, roughness: 0.4 },
+    obstacle: { color: 0x3a3f4c, roughness: 0.85 },
+    emitter: { color: 0x555c6e, roughness: 0.4, metalness: 0.6 }
+  };
+  let matKind = 'lambert';
+  const mats = {};
+  Object.keys(LIT).forEach(function (k) { mats[k] = litMaterial(matKind, LIT[k].physical, LIT[k]); });
+
   // ---------- desk + page ----------
-  const deskMat = new THREE.MeshStandardMaterial({ color: 0x2b2f3a, roughness: 0.8, metalness: 0, envMapIntensity: 0.35 });
-  const desk = new THREE.Mesh(new THREE.PlaneGeometry(90, 64), deskMat);
+  const desk = new THREE.Mesh(new THREE.PlaneGeometry(90, 64), mats.desk);
   desk.position.set(PAGE_CX, PAGE_CY, -0.5);
   desk.receiveShadow = true;
   envGroup.add(desk);
 
-  const pageMat = new THREE.MeshStandardMaterial({ color: 0xf2ecdf, roughness: 0.9, metalness: 0, envMapIntensity: 0.2 });
   let paperTex = null;
   // Authored paper grain (assets/paper-grain.webp). The flat theme colour is
   // the fallback: if the texture never arrives the page simply stays plain.
@@ -183,14 +218,14 @@ export function createRenderer(container, opts) {
     tex.repeat.set(4, 2.8);
     tex.anisotropy = Math.min(4, renderer.capabilities.getMaxAnisotropy());
     paperTex = tex;
-    pageMat.map = tex;
+    mats.page.map = tex;
+    mats.page.needsUpdate = true;
     applyDetail();
   }, undefined, function () { /* keep the plain page */ });
-  const pageEdgeMat = new THREE.MeshStandardMaterial({ color: 0xd8d0bc, roughness: 0.9, metalness: 0 });
   const pageW = FRAMING.WORLD_W / S, pageH = FRAMING.WORLD_H / S;
-  const pageEdge = new THREE.Mesh(new THREE.BoxGeometry(pageW + 0.24, pageH + 0.24, 0.05), pageEdgeMat);
+  const pageEdge = new THREE.Mesh(new THREE.BoxGeometry(pageW + 0.24, pageH + 0.24, 0.05), mats.pageEdge);
   pageEdge.position.set(PAGE_CX, PAGE_CY, FRAMING.PAGE_Z - 0.045);
-  const page = new THREE.Mesh(new THREE.BoxGeometry(pageW, pageH, 0.04), pageMat);
+  const page = new THREE.Mesh(new THREE.BoxGeometry(pageW, pageH, 0.04), mats.page);
   page.position.set(PAGE_CX, PAGE_CY, FRAMING.PAGE_Z - 0.02);
   page.receiveShadow = true;
   page.castShadow = true;
@@ -200,7 +235,7 @@ export function createRenderer(container, opts) {
   // Detail: a couple of loose sheets under the page so it reads as a sketchbook.
   const underSheets = new THREE.Group();
   [[0.1, -0.08, -0.012, -0.09], [-0.14, -0.05, 0.018, -0.13]].forEach(function (o) {
-    const sh = new THREE.Mesh(new THREE.BoxGeometry(pageW + 0.1, pageH + 0.1, 0.02), pageEdgeMat);
+    const sh = new THREE.Mesh(new THREE.BoxGeometry(pageW + 0.1, pageH + 0.1, 0.02), mats.pageEdge);
     sh.position.set(PAGE_CX + o[0], PAGE_CY + o[1], o[3]);
     sh.rotation.z = o[2];
     sh.castShadow = true; sh.receiveShadow = true;
@@ -221,45 +256,62 @@ export function createRenderer(container, opts) {
   // ---------- shared materials / geometry ----------
   // Physical materials: clearcoat/sheen are switched on by the Surface detail
   // option (zero = the plain standard path).
-  const inkMat = new THREE.MeshPhysicalMaterial({ color: 0x2a2e38, roughness: 0.55, metalness: 0.05, envMapIntensity: 0.9 });
-  const creatureMat = new THREE.MeshPhysicalMaterial({ color: 0x3b4d8f, roughness: 0.5, emissive: 0x3b4d8f, emissiveIntensity: 0.12, sheenColor: 0xc8d4ff });
-  const eyeMat = new THREE.MeshStandardMaterial({ color: 0x14161c, roughness: 0.4 });
   const glowMat = new THREE.MeshBasicMaterial({ color: 0xe8a84b, transparent: true, opacity: 0.22, depthWrite: false });
   const ghostMat = new THREE.MeshBasicMaterial({ color: 0xe8a84b, transparent: true, opacity: 0.45, depthWrite: false });
   const hintMat = new THREE.MeshBasicMaterial({ color: 0xe8a84b, transparent: true, opacity: 0.55, depthWrite: false });
-  const obstacleMat = new THREE.MeshStandardMaterial({ color: 0x3a3f4c, roughness: 0.85 });
-  const emitterMat = new THREE.MeshStandardMaterial({ color: 0x555c6e, roughness: 0.4, metalness: 0.6 });
   const discTex = softDiscTexture();
   const haloMat = new THREE.MeshBasicMaterial({ color: 0xe8a84b, map: discTex, transparent: true, opacity: 0.5, depthWrite: false, blending: THREE.AdditiveBlending });
   const haloGeo = new THREE.PlaneGeometry(1, 1);
 
-  const creatureGeo = new THREE.SphereGeometry(1, 24, 18);
-  const eyeGeo = new THREE.SphereGeometry(0.07, 10, 8);
-  const ringGeo = new THREE.RingGeometry(0.85, 1.12, 40);
+  // Round geometry LOD (budget.sphere = wisp body width segments; hazards/eyes/rings scale with it).
+  // Rebuilt in place by applyGeometry when the budget changes; meshes keep their geometry objects.
+  const creatureGeo = new THREE.BufferGeometry();
+  const eyeGeo = new THREE.BufferGeometry();
+  const ringGeo = new THREE.BufferGeometry();
   const obstacleGeo = new THREE.BoxGeometry(1, 1, 0.14);
-  const emitterGeo = new THREE.ConeGeometry(0.16, 0.34, 10);
-
-  // Hazard geometries per type.
+  const emitterGeo = new THREE.BufferGeometry();
   const HAZARD_GEO = {
-    drop: new THREE.SphereGeometry(1, 12, 10),
+    drop: new THREE.BufferGeometry(),
     pebble: new THREE.IcosahedronGeometry(1, 0),
     ember: new THREE.OctahedronGeometry(1, 0),
-    gale: new THREE.TorusGeometry(0.8, 0.32, 8, 16)
+    gale: new THREE.BufferGeometry()
   };
+  let sphereSegs = 0;
+  function copyGeometry(dst, src) {
+    dst.dispose();
+    dst.index = src.index;
+    dst.attributes = src.attributes;
+    dst.groups = src.groups;
+    dst.boundingSphere = null; dst.boundingBox = null;
+    dst.parameters = src.parameters;
+  }
+  function applyGeometry(seg) {
+    if (seg === sphereSegs) return;
+    sphereSegs = seg;
+    const k = seg / 24; // 24 = the original authored detail
+    const n = function (base, min) { return Math.max(min, Math.round(base * k)); };
+    copyGeometry(creatureGeo, new THREE.SphereGeometry(1, seg, n(18, 8)));
+    copyGeometry(eyeGeo, new THREE.SphereGeometry(0.07, n(10, 6), n(8, 4)));
+    copyGeometry(ringGeo, new THREE.RingGeometry(0.85, 1.12, n(40, 20)));
+    copyGeometry(emitterGeo, new THREE.ConeGeometry(0.16, 0.34, n(10, 6)));
+    copyGeometry(HAZARD_GEO.drop, new THREE.SphereGeometry(1, n(12, 8), n(10, 6)));
+    copyGeometry(HAZARD_GEO.gale, new THREE.TorusGeometry(0.8, 0.32, n(8, 5), n(16, 10)));
+  }
 
   // ---------- module state ----------
   let palette = null;
   let highContrast = false;
   let reducedMotion = false;
   const gpu = gpuName(renderer);
-  const detected = detectPreset(gpu, touchDevice());
-  let q = resolve({}, 'low');      // resolved graphics settings (see gfx.js)
+  const level = hardwareLevel(gpu);
+  const detected = presetForLevel(level);
+  let q = resolve({}, 'low', 0);   // resolved graphics settings (see gfx.js)
   let gfxSaved = null;
   let cfg = null;
   let decorRng = null;
   let visible = true;
   let disposed = false;
-  let particleCap = PARTICLE_CAP.low;
+  let particleCap = 0;
   const mqReduced = window.matchMedia ? matchMedia('(prefers-reduced-motion: reduce)') : null;
   function motionOff() { return reducedMotion || !!(mqReduced && mqReduced.matches); }
 
@@ -274,19 +326,31 @@ export function createRenderer(container, opts) {
   const hazardPools = {};
   const activeHazards = new Map(); // id -> {mesh, type}
 
-  // Particle pool (small tetra shards, bounded).
+  // Spark pool: small tetra shards drawn as ONE instanced mesh (per-instance colour; they shrink as they
+  // fade). The pool is sized to the budget's spark cap, so every preset costs a single draw call.
   const particles = [];
   const particleGeo = new THREE.TetrahedronGeometry(0.07);
-  for (let i = 0; i < PARTICLE_CAP.high; i++) {
-    const m = new THREE.Mesh(particleGeo, new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9 }));
-    m.visible = false;
-    m.raycast = function () {}; // cosmetic: never intercept raycasts
-    fxGroup.add(m);
-    particles.push({ mesh: m, alive: false, vx: 0, vy: 0, vz: 0, life: 0, maxLife: 1 });
+  const sparkMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+  let sparks = null;
+  const _m4 = new THREE.Matrix4(), _q = new THREE.Quaternion(), _e = new THREE.Euler(), _s3 = new THREE.Vector3(), _c = new THREE.Color();
+  function sizeSparkPool(n) {
+    if (sparks && sparks.count === n) return;
+    if (sparks) { fxGroup.remove(sparks); sparks.dispose(); }
+    particles.length = 0;
+    sparks = new THREE.InstancedMesh(particleGeo, sparkMat, Math.max(1, n));
+    sparks.count = n;
+    sparks.frustumCulled = false;
+    sparks.raycast = function () {}; // cosmetic: never intercept raycasts
+    _m4.makeScale(0, 0, 0);
+    for (let i = 0; i < Math.max(1, n); i++) { sparks.setMatrixAt(i, _m4); sparks.setColorAt(i, _c.setHex(0xffffff)); }
+    sparks.visible = false;
+    fxGroup.add(sparks);
+    for (let i = 0; i < n; i++) particles.push({ alive: false, x: 0, y: 0, z: 0, rx: 0, ry: 0, vx: 0, vy: 0, vz: 0, life: 0, maxLife: 1 });
   }
 
-  // Ambient dust drifting through the lamp light (Ambient motion option).
-  const DUST = 90;
+  // Ambient dust drifting through the lamp light (Ambient motion option); the budget draws the first
+  // budget.dust motes of the pool.
+  const DUST = 320;
   const dustPos = new Float32Array(DUST * 3);
   const dustSeed = new Float32Array(DUST);
   for (let i = 0; i < DUST; i++) {
@@ -331,14 +395,10 @@ export function createRenderer(container, opts) {
     if (!hazardPools[type]) {
       hazardPools[type] = {
         free: [],
-        mat: new THREE.MeshPhysicalMaterial({
-          color: color, roughness: 0.45,
-          emissive: type === 'ember' ? color : 0x000000,
-          emissiveIntensity: type === 'ember' ? 0.55 : 0
-        })
+        mat: litMaterial(matKind, true, { color: color, roughness: 0.45, emissive: type === 'ember' ? color : 0x000000, emissiveIntensity: type === 'ember' ? 0.55 : 0 })
       };
       styleHazardMat(type, hazardPools[type].mat);
-      if (q.reflections === 'on') { hazardPools[type].mat.envMap = environment(); hazardPools[type].mat.envMapIntensity = type === 'drop' ? 0.45 : 0.4; }
+      if (q.reflections === 'on' && hazardPools[type].mat.isMeshStandardMaterial) { hazardPools[type].mat.envMap = environment(); hazardPools[type].mat.envMapIntensity = type === 'drop' ? 0.45 : 0.4; }
     } else {
       hazardPools[type].mat.color.setHex(color);
       if (type === 'ember') hazardPools[type].mat.emissive.setHex(color);
@@ -376,19 +436,19 @@ export function createRenderer(container, opts) {
 
   function spawnParticles(x, y, colorHex, count, spread) {
     let spawned = 0;
+    // High particles: HDR-bright shards so bloom makes them sparkle.
+    _c.setHex(colorHex);
+    if (q.particles === 'high') _c.multiplyScalar(1.8);
     for (let i = 0; i < particles.length && spawned < count; i++) {
       const p = particles[i];
       if (p.alive) continue;
       p.alive = true;
       p.life = 0;
       p.maxLife = motionOff() ? 0.25 : 0.55 + Math.random() * 0.35;
-      p.mesh.visible = true;
-      p.mesh.position.set(wx(x), wy(y), 0.25);
-      p.mesh.material.color.setHex(colorHex);
-      // High particles: HDR-bright shards so bloom makes them sparkle.
-      p.mesh.material.toneMapped = q.particles !== 'high';
-      if (q.particles === 'high') p.mesh.material.color.multiplyScalar(1.8);
-      p.mesh.material.opacity = 0.95;
+      p.x = wx(x); p.y = wy(y); p.z = 0.25; p.rx = 0; p.ry = 0;
+      sparks.setColorAt(i, _c);
+      sparks.instanceColor.needsUpdate = true;
+      sparks.visible = true;
       const a = Math.random() * Math.PI * 2;
       const sp = (spread || 2.4) * (0.4 + Math.random() * 0.8);
       p.vx = Math.cos(a) * sp; p.vy = Math.sin(a) * sp * 0.9 + 1.2; p.vz = 0.6 + Math.random() * 1.4;
@@ -396,27 +456,35 @@ export function createRenderer(container, opts) {
     }
   }
 
+  function hideSpark(i) {
+    particles[i].alive = false;
+    sparks.setMatrixAt(i, _m4.makeScale(0, 0, 0));
+  }
+
   function updateParticles(dt) {
+    if (!sparks || !sparks.visible) return;
+    let any = false;
     for (let i = 0; i < particles.length; i++) {
       const p = particles[i];
       if (!p.alive) continue;
       p.life += dt;
-      if (p.life >= p.maxLife) { p.alive = false; p.mesh.visible = false; continue; }
+      if (p.life >= p.maxLife) { hideSpark(i); continue; }
+      any = true;
       p.vy -= 6 * dt;
-      p.mesh.position.x += p.vx * dt;
-      p.mesh.position.y += p.vy * dt;
-      p.mesh.position.z += p.vz * dt;
-      if (p.mesh.position.z < 0.05) { p.mesh.position.z = 0.05; p.vz *= -0.4; }
-      p.mesh.material.opacity = 0.95 * (1 - p.life / p.maxLife);
-      p.mesh.rotation.x += dt * 5; p.mesh.rotation.y += dt * 4;
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+      p.z += p.vz * dt;
+      if (p.z < 0.05) { p.z = 0.05; p.vz *= -0.4; }
+      p.rx += dt * 5; p.ry += dt * 4;
+      // Fade by shrinking (one opaque instanced draw instead of a transparent mesh per shard).
+      const k = Math.max(0.001, 1 - p.life / p.maxLife);
+      _q.setFromEuler(_e.set(p.rx, p.ry, 0));
+      sparks.setMatrixAt(i, _m4.compose(_v3.set(p.x, p.y, p.z), _q, _s3.set(k, k, k)));
     }
+    sparks.instanceMatrix.needsUpdate = true;
+    if (!any) sparks.visible = false;
   }
 
-  function aliveParticleCount() {
-    let n = 0;
-    for (let i = 0; i < particles.length; i++) if (particles[i].alive) n++;
-    return n;
-  }
 
   // ---------- strokes ----------
   function strokeCurve(pts, radius) {
@@ -426,19 +494,39 @@ export function createRenderer(container, opts) {
     return new THREE.CatmullRomCurve3(v, false, 'catmullrom', 0.5);
   }
 
-  function buildStrokeMesh(pts, thickness, material) {
+  // Ink tube LOD from the budget: radial segments (tube) and length segments (×tubeLen).
+  function strokeGeometry(pts, thickness) {
     const radius = Math.max(2, thickness) / S / 2;
     const curve = strokeCurve(pts, radius);
-    const segs = Math.min(480, Math.max(8, pts.length * 4));
-    const geo = new THREE.TubeGeometry(curve, segs, radius, 8, false);
-    const mesh = new THREE.Mesh(geo, material);
+    const b = q.budget;
+    const segs = Math.min(720, Math.max(8, Math.round(pts.length * 4 * b.tubeLen)));
+    return new THREE.TubeGeometry(curve, segs, radius, b.tube, false);
+  }
+
+  function buildStrokeMesh(pts, thickness, material) {
+    const mesh = new THREE.Mesh(strokeGeometry(pts, thickness), material);
+    mesh.userData.pts = pts;
+    mesh.userData.thickness = thickness;
     mesh.castShadow = true;
     return mesh;
   }
 
+  // A tube-LOD budget change rebuilds the committed strokes' geometry from their points.
+  let tubeKey = '';
+  function applyTubeBudget() {
+    const k = q.budget.tube + '|' + q.budget.tubeLen;
+    if (k === tubeKey) return;
+    tubeKey = k;
+    strokeMeshes.forEach(function (m) {
+      const old = m.geometry;
+      m.geometry = strokeGeometry(m.userData.pts, m.userData.thickness);
+      old.dispose();
+    });
+  }
+
   function addStroke(pts) {
     const th = (cfg && cfg.ink && cfg.ink.thickness) || 12;
-    const mesh = buildStrokeMesh(pts, th, inkMat);
+    const mesh = buildStrokeMesh(pts, th, mats.ink);
     gameGroup.add(mesh);
     strokeMeshes.push(mesh);
     if (!motionOff()) { mesh.userData.bornAt = performance.now(); mesh.scale.setScalar(0.01); }
@@ -518,12 +606,12 @@ export function createRenderer(container, opts) {
 
     (cfg.creatures || []).forEach(function (cr) {
       const g = new THREE.Group();
-      const body = new THREE.Mesh(creatureGeo, creatureMat);
+      const body = new THREE.Mesh(creatureGeo, mats.creature);
       const r = cr.r / S;
       body.scale.set(r, r * 0.82, r * 0.7);
       body.castShadow = true;
-      const eL = new THREE.Mesh(eyeGeo, eyeMat);
-      const eR = new THREE.Mesh(eyeGeo, eyeMat);
+      const eL = new THREE.Mesh(eyeGeo, mats.eye);
+      const eR = new THREE.Mesh(eyeGeo, mats.eye);
       eL.position.set(-r * 0.34, r * 0.18, r * 0.62);
       eR.position.set(r * 0.34, r * 0.18, r * 0.62);
       const glow = new THREE.Mesh(ringGeo, glowMat); // soft ring on the page under the wisp
@@ -552,7 +640,7 @@ export function createRenderer(container, opts) {
 
     (cfg.obstacles || []).forEach(function (o) {
       const len = Math.hypot(o.x2 - o.x1, o.y2 - o.y1) / S;
-      const mesh = new THREE.Mesh(obstacleGeo, obstacleMat);
+      const mesh = new THREE.Mesh(obstacleGeo, mats.obstacle);
       mesh.scale.set(len, (o.th || 16) / S, 1);
       mesh.position.set(wx((o.x1 + o.x2) / 2), wy((o.y1 + o.y2) / 2), FRAMING.PAGE_Z + 0.07);
       mesh.rotation.z = Math.atan2(o.y2 - o.y1, o.x2 - o.x1);
@@ -563,7 +651,7 @@ export function createRenderer(container, opts) {
     });
 
     (cfg.emitters || []).forEach(function (em) {
-      const noz = new THREE.Mesh(emitterGeo, emitterMat);
+      const noz = new THREE.Mesh(emitterGeo, mats.emitter);
       noz.position.set(wx(em.x), wy(em.y), FRAMING.PAGE_Z + 0.1);
       noz.rotation.z = Math.atan2(em.dy, em.dx) - Math.PI / 2;
       noz.castShadow = true;
@@ -577,12 +665,12 @@ export function createRenderer(container, opts) {
     if (!p) return;
     palette = p;
     highContrast = !!(o && o.highContrast);
-    deskMat.color.setHex(p.desk);
-    pageMat.color.setHex(p.paper);
-    pageEdgeMat.color.setHex(p.paperEdge);
-    inkMat.color.setHex(highContrast ? 0x10131a : p.ink);
-    creatureMat.color.setHex(p.creature);
-    creatureMat.emissive.setHex(p.creature);
+    mats.desk.color.setHex(p.desk);
+    mats.page.color.setHex(p.paper);
+    mats.pageEdge.color.setHex(p.paperEdge);
+    mats.ink.color.setHex(highContrast ? 0x10131a : p.ink);
+    mats.creature.color.setHex(p.creature);
+    mats.creature.emissive.setHex(p.creature);
     glowMat.color.setHex(p.accent);
     haloMat.color.setHex(p.accent);
     rim.color.setHex(p.creature).lerp(new THREE.Color(0xbcd4ff), 0.6);
@@ -776,46 +864,81 @@ export function createRenderer(container, opts) {
 
   function styleHazardMat(type, m) {
     const rich = q.detail === 'detailed';
-    m.roughness = type === 'drop' ? (rich ? 0.25 : 0.35) : type === 'pebble' ? 0.7 : type === 'gale' ? 0.3 : 0.45;
-    m.clearcoat = rich ? (type === 'drop' ? 0.6 : type === 'pebble' ? 0 : 0.4) : 0;
-    m.clearcoatRoughness = 0.15;
+    if (m.isMeshStandardMaterial) m.roughness = type === 'drop' ? (rich ? 0.25 : 0.35) : type === 'pebble' ? 0.7 : type === 'gale' ? 0.3 : 0.45;
+    if (m.isMeshPhysicalMaterial) {
+      m.clearcoat = rich ? (type === 'drop' ? 0.6 : type === 'pebble' ? 0 : 0.4) : 0;
+      m.clearcoatRoughness = 0.15;
+    }
     // Embers run HDR-bright when bloom is on so only they (and sparks) glow.
     if (type === 'ember') m.emissiveIntensity = q.bloom === 'on' ? 1.7 : 0.55;
   }
 
   // Image-based lighting per material (scene.environment would force one
   // intensity on everything; paper must stay matte so ink keeps its contrast).
-  const ENV_INTENSITY = [[deskMat, 0.3], [pageMat, 0.12], [pageEdgeMat, 0.2], [inkMat, 0.35], [creatureMat, 0.35],
-    [obstacleMat, 0.35], [emitterMat, 0.9]];
+  const ENV_INTENSITY = { desk: 0.3, page: 0.12, pageEdge: 0.2, ink: 0.35, creature: 0.35, obstacle: 0.35, emitter: 0.9 };
   function applyReflections() {
     const env = q.reflections === 'on' ? environment() : null;
     const set = function (m, k) {
+      if (!m.isMeshStandardMaterial) return; // Lambert (Low) has no image-based lighting
       if (m.envMap !== env) { m.envMap = env; m.needsUpdate = true; }
       m.envMapIntensity = k;
     };
-    ENV_INTENSITY.forEach(function (e) { set(e[0], e[1]); });
+    Object.keys(ENV_INTENSITY).forEach(function (k) { set(mats[k], ENV_INTENSITY[k]); });
     Object.keys(hazardPools).forEach(function (t) { set(hazardPools[t].mat, t === 'drop' ? 0.45 : 0.4); });
     hemi.intensity = env ? 0.7 : 0.85; // IBL takes over part of the fill
   }
 
+  // Swap every lit material to the budget's class (Lambert / Standard / Physical), keeping theme colours.
+  function applyMaterialClass(kind) {
+    if (kind === matKind) return;
+    matKind = kind;
+    const swap = new Map();
+    Object.keys(LIT).forEach(function (k) {
+      const old = mats[k];
+      const m = litMaterial(kind, LIT[k].physical, LIT[k]);
+      m.color.copy(old.color);
+      if (old.emissive) m.emissive.copy(old.emissive);
+      if (old.map) m.map = old.map;
+      swap.set(old, m);
+      mats[k] = m;
+    });
+    Object.keys(hazardPools).forEach(function (t) {
+      const old = hazardPools[t].mat;
+      const m = litMaterial(kind, true, { color: 0, roughness: 0.45, emissive: 0, emissiveIntensity: old.emissiveIntensity });
+      m.color.copy(old.color); m.emissive.copy(old.emissive);
+      swap.set(old, m);
+      hazardPools[t].mat = m;
+      hazardPools[t].free.forEach(function (mesh) { mesh.material = m; });
+    });
+    scene.traverse(function (o) { const m = o.material && swap.get(o.material); if (m) o.material = m; });
+    swap.forEach(function (_m, old) { old.dispose(); });
+  }
+
+  let woodSize = 0;
   function applyDetail() {
     const rich = q.detail === 'detailed';
-    if (rich && !woodTex) woodTex = woodTexture();
-    deskMat.map = rich ? woodTex : null;
-    deskMat.roughness = rich ? 0.72 : 0.95;
-    pageMat.bumpMap = rich && paperTex ? paperTex : null;
-    pageMat.bumpScale = 1.4;
-    inkMat.clearcoat = rich ? 0.35 : 0;
-    inkMat.clearcoatRoughness = 0.25;
-    inkMat.roughness = rich ? 0.4 : 0.55;
-    creatureMat.clearcoat = rich ? 0.5 : 0;
-    creatureMat.sheen = rich ? 0.35 : 0;
-    creatureMat.roughness = rich ? 0.42 : 0.5;
+    if (rich && woodSize !== q.budget.wood) {
+      if (woodTex) woodTex.dispose();
+      woodSize = q.budget.wood;
+      woodTex = woodTexture(woodSize);
+    }
+    mats.desk.map = rich ? woodTex : null;
+    mats.desk.roughness = rich ? 0.72 : 0.95;
+    mats.page.bumpMap = rich && paperTex ? paperTex : null;
+    mats.page.bumpScale = 1.4;
+    mats.ink.roughness = rich ? 0.4 : 0.55;
+    mats.creature.roughness = rich ? 0.42 : 0.5;
+    if (mats.ink.isMeshPhysicalMaterial) {
+      mats.ink.clearcoat = rich ? 0.35 : 0;
+      mats.ink.clearcoatRoughness = 0.25;
+      mats.creature.clearcoat = rich ? 0.5 : 0;
+      mats.creature.sheen = rich ? 0.35 : 0;
+    }
     underSheets.visible = rich;
     rim.intensity = rich ? 0.55 : 0;
     creatures.forEach(function (c) { if (c.halo) c.halo.visible = rich; });
     Object.keys(hazardPools).forEach(function (t) { styleHazardMat(t, hazardPools[t].mat); });
-    [deskMat, pageMat].forEach(function (m) { m.needsUpdate = true; });
+    Object.keys(mats).forEach(function (k) { mats[k].needsUpdate = true; });
   }
 
   let composer = null, postFailed = false, postKey = null, gradePass = null;
@@ -827,7 +950,11 @@ export function createRenderer(container, opts) {
     if (json === gfxSaved) return;
     gfxSaved = json;
     const prevShadows = q.shadows;
-    q = resolve(saved || {}, detected);
+    q = resolve(saved || {}, detected, level);
+    const b = q.budget;
+    applyMaterialClass(b.material);
+    applyGeometry(b.sphere);
+    applyTubeBudget();
     const size = SHADOW_MAP[q.shadows];
     renderer.shadowMap.enabled = size > 0;
     key.castShadow = size > 0;
@@ -842,11 +969,10 @@ export function createRenderer(container, opts) {
       });
     }
     applyReflections();
-    particleCap = PARTICLE_CAP[q.particles];
-    let alive = aliveParticleCount();
-    for (let i = 0; i < particles.length && alive > particleCap; i++) {
-      if (particles[i].alive) { particles[i].alive = false; particles[i].mesh.visible = false; alive--; }
-    }
+    particleCap = b.sparks;
+    sizeSparkPool(particleCap);
+    if (sparkMat.toneMapped !== (q.particles !== 'high')) { sparkMat.toneMapped = q.particles !== 'high'; sparkMat.needsUpdate = true; }
+    dustGeo.setDrawRange(0, b.dust);
     applyDetail();
     applyMotion();
     adaptiveScale = 1;
@@ -877,10 +1003,19 @@ export function createRenderer(container, opts) {
   function graphicsInfo() {
     const px = [Math.round(sizeW * pixelRatio), Math.round(sizeH * pixelRatio)];
     return {
-      gpu: gpu, detected: detected, resolved: q, pixels: px,
+      gpu: gpu, level: level, detected: detected, resolved: q, pixels: px,
       summary: describe(q, px), fps: Math.round(fps),
       adaptiveScale: Math.round(adaptiveScale * 100) / 100, postFailed: postFailed
     };
+  }
+
+  // Run a post pass at a fraction of the frame: EffectComposer.addPass/setSize hand every pass the full
+  // frame size, so the pass's own setSize applies the budget's scale (half-res bloom/GTAO below Ultra).
+  function atScale(pass, k) {
+    if (k >= 1) return pass;
+    const setSize = pass.setSize.bind(pass);
+    pass.setSize = function (w, h) { setSize(Math.max(1, Math.round(w * k)), Math.max(1, Math.round(h * k))); };
+    return pass;
   }
 
   function buildPost(w, h) {
@@ -899,7 +1034,7 @@ export function createRenderer(container, opts) {
       c.addPass(new RenderPass(scene, camera));
       if (q.ao !== 'off') {
         const hi = q.ao === 'high';
-        const ao = new GTAOPass(scene, camera, pw, ph);
+        const ao = atScale(new GTAOPass(scene, camera, pw, ph), q.budget.aoRes);
         ao.output = GTAOPass.OUTPUT.Default;
         ao.blendIntensity = hi ? 0.85 : 0.7;
         ao.updateGtaoMaterial({ radius: 0.35, distanceExponent: 1.4, thickness: 0.6, scale: 1.0, samples: hi ? 16 : 8 });
@@ -908,7 +1043,7 @@ export function createRenderer(container, opts) {
       }
       if (q.bloom === 'on') {
         // High threshold: only embers, sparks and glints bloom; paper stays crisp.
-        c.addPass(new UnrealBloomPass(new THREE.Vector2(w, h), 0.55, 0.45, 0.9));
+        c.addPass(atScale(new UnrealBloomPass(new THREE.Vector2(w, h), 0.55, 0.45, 0.9), q.budget.bloomRes));
       }
       c.addPass(new OutputPass());
       if (q.grade === 'on') { gradePass = new ShaderPass(GradeShader); c.addPass(gradePass); }
@@ -1039,7 +1174,7 @@ export function createRenderer(container, opts) {
       }
       const flashing = nowMs < c.flashUntil;
       c.body.children.forEach(function (m) {
-        if (m.material === creatureMat) m.material.emissiveIntensity = flashing ? 0.8 : 0.12;
+        if (m.material === mats.creature) m.material.emissiveIntensity = flashing ? 0.8 : 0.12;
       });
     }
 
@@ -1074,7 +1209,7 @@ export function createRenderer(container, opts) {
     // ambient dust: slow rise with a lazy sideways sway, wrapping at the top
     if (dust.visible) {
       const t = nowMs / 1000;
-      for (let i = 0; i < DUST; i++) {
+      for (let i = 0, n = q.budget.dust; i < n; i++) {
         let y = dustPos[i * 3 + 1] + dt * 0.12;
         if (y > 8.5) y = -1;
         dustPos[i * 3 + 1] = y;
