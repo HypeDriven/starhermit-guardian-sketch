@@ -20,7 +20,6 @@
     ['Malformed action', 'Acción no válida', 'Fehlerhafte Aktion', 'Action mal formée', 'Ação malformada', 'Azione non valida'],
     ['Not allowed', 'No permitido', 'Nicht erlaubt', 'Non autorisé', 'Não permitido', 'Non consentito'],
     // ---- title
-    ['Board state', 'Estado del tablero', 'Spielfeldzustand', 'État du plateau', 'Estado do tabuleiro', 'Stato del campo'],
     ['Draw ink. Shield the wisps. Weather the storm.', 'Traza tinta. Protege a los fuegos fatuos. Resiste la tormenta.', 'Zeichne Tinte. Schütze die Irrlichter. Trotze dem Sturm.', 'Tracez à l’encre. Protégez les feux follets. Bravez la tempête.', 'Desenhe com tinta. Proteja os fogos-fátuos. Enfrente a tempestade.', 'Disegna con l’inchiostro. Proteggi i fuochi fatui. Resisti alla tempesta.'],
     ['Journey stars: {n} / 120', 'Estrellas del viaje: {n} / 120', 'Reisesterne: {n} / 120', 'Étoiles du voyage : {n} / 120', 'Estrelas da jornada: {n} / 120', 'Stelle del viaggio: {n} / 120'],
     ['Today’s daily: done ({score})', 'Diario de hoy: hecho ({score})', 'Heutige Tagesrunde: erledigt ({score})', 'Défi du jour : fait ({score})', 'Desafio de hoje: feito ({score})', 'Sfida di oggi: completata ({score})'],
@@ -73,22 +72,14 @@
     ['Restart', 'Reiniciar', 'Neu starten', 'Recommencer', 'Reiniciar', 'Ricomincia'],
     ['Quit to title', 'Salir al título', 'Zum Titelbildschirm', 'Retour à l’écran titre', 'Sair para o título', 'Torna al titolo'],
     ['Audio', 'Audio', 'Audio', 'Audio', 'Áudio', 'Audio'],
-    ['Music', 'Música', 'Musik', 'Musique', 'Música', 'Musica'],
-    ['Effects', 'Efectos', 'Effekte', 'Effets', 'Efeitos', 'Effetti'],
-    ['Ambience', 'Ambiente', 'Atmosphäre', 'Ambiance', 'Ambiente', 'Ambiente'],
-    ['Voice', 'Voz', 'Stimme', 'Voix', 'Voz', 'Voce'],
-    ['Mute all', 'Silenciar todo', 'Alles stumm', 'Tout couper', 'Silenciar tudo', 'Disattiva tutto'],
     ['Captions', 'Subtítulos', 'Untertitel', 'Sous-titres', 'Legendas', 'Sottotitoli'],
     ['Graphics', 'Gráficos', 'Grafik', 'Graphismes', 'Gráficos', 'Grafica'],
     ['Theme', 'Tema', 'Thema', 'Thème', 'Tema', 'Tema'],
     ['{name} 🔒', '{name} 🔒', '{name} 🔒', '{name} 🔒', '{name} 🔒', '{name} 🔒'],
     ['Accessibility', 'Accesibilidad', 'Barrierefreiheit', 'Accessibilité', 'Acessibilidade', 'Accessibilità'],
-    ['Reduced motion', 'Movimiento reducido', 'Weniger Bewegung', 'Animations réduites', 'Movimento reduzido', 'Movimento ridotto'],
-    ['High contrast', 'Alto contraste', 'Hoher Kontrast', 'Contraste élevé', 'Alto contraste', 'Contrasto elevato'],
     ['Color palette', 'Paleta de colores', 'Farbpalette', 'Palette de couleurs', 'Paleta de cores', 'Tavolozza colori'],
     ['Standard', 'Estándar', 'Standard', 'Standard', 'Padrão', 'Standard'],
     ['High visibility', 'Alta visibilidad', 'Gut sichtbar', 'Haute visibilité', 'Alta visibilidade', 'Alta visibilità'],
-    ['Large text', 'Texto grande', 'Große Schrift', 'Grand texte', 'Texto grande', 'Testo grande'],
     ['Left-handed controls', 'Controles para zurdos', 'Linkshänder-Steuerung', 'Commandes pour gauchers', 'Controles para canhotos', 'Comandi per mancini'],
     ['Haptics', 'Vibración', 'Haptik', 'Retour haptique', 'Vibração', 'Vibrazione'],
     ['Always-on board state panel', 'Panel de estado del tablero siempre visible', 'Spielfeldzustand immer anzeigen', 'Panneau d’état du plateau toujours affiché', 'Painel de estado do tabuleiro sempre visível', 'Pannello dello stato sempre visibile'],
@@ -135,7 +126,6 @@
     ['Keyboard & gamepad', 'Teclado y mando', 'Tastatur & Gamepad', 'Clavier et manette', 'Teclado e controle', 'Tastiera e gamepad'],
     ['Close', 'Cerrar', 'Schließen', 'Fermer', 'Fechar', 'Chiudi'],
     ['Escape', 'Esc', 'Esc', 'Échap', 'Esc', 'Esc'],
-    ['Space', 'Espacio', 'Leertaste', 'Espace', 'Espaço', 'Spazio'],
     ['Enter', 'Intro', 'Eingabe', 'Entrée', 'Enter', 'Invio'],
     ['{a} or {b}', '{a} o {b}', '{a} oder {b}', '{a} ou {b}', '{a} ou {b}', '{a} o {b}'],
     ['Move the pen', 'Mover la pluma', 'Stift bewegen', 'Déplacer la plume', 'Mover a pena', 'Muovi la penna'],
@@ -149,20 +139,17 @@
     ['Confirm default button', 'Confirmar el botón predeterminado', 'Standardschaltfläche bestätigen', 'Valider le bouton par défaut', 'Confirmar o botão padrão', 'Conferma il pulsante predefinito'],
     ['Reset camera framing', 'Restablecer el encuadre de la cámara', 'Kameraausschnitt zurücksetzen', 'Réinitialiser le cadrage', 'Redefinir o enquadramento da câmera', 'Reimposta l’inquadratura'],
     ['Gamepad dpad/stick', 'Mando: cruceta/palanca', 'Gamepad: Steuerkreuz/Stick', 'Manette : croix/stick', 'Controle: direcional/analógico', 'Gamepad: croce/levetta'],
-    ['Gamepad A / B / Start', 'Mando A / B / Start', 'Gamepad A / B / Start', 'Manette A / B / Start', 'Controle A / B / Start', 'Gamepad A / B / Start'],
     ['Draw or confirm / cancel / pause', 'Dibujar o confirmar / cancelar / pausa', 'Zeichnen oder bestätigen / abbrechen / Pause', 'Dessiner ou valider / annuler / pause', 'Desenhar ou confirmar / cancelar / pausar', 'Disegna o conferma / annulla / pausa'],
     // ---- learn
     ['Lesson {n} of {total}', 'Lección {n} de {total}', 'Lektion {n} von {total}', 'Leçon {n} sur {total}', 'Lição {n} de {total}', 'Lezione {n} di {total}'],
     ['Skip lesson', 'Saltar lección', 'Lektion überspringen', 'Passer la leçon', 'Pular lição', 'Salta lezione'],
     ['Quit lessons', 'Salir de las lecciones', 'Lektionen beenden', 'Quitter les leçons', 'Sair das lições', 'Esci dalle lezioni'],
     ['Lesson {n}: {title}', 'Lección {n}: {title}', 'Lektion {n}: {title}', 'Leçon {n} : {title}', 'Lição {n}: {title}', 'Lezione {n}: {title}'],
-    ['Lesson complete!', '¡Lección completada!', 'Lektion geschafft!', 'Leçon terminée !', 'Lição concluída!', 'Lezione completata!'],
     ['Lesson complete! {title}', '¡Lección completada! {title}', 'Lektion geschafft! {title}', 'Leçon terminée ! {title}', 'Lição concluída! {title}', 'Lezione completata! {title}'],
     // ---- scores
     ['Global', 'Global', 'Global', 'Mondial', 'Global', 'Globale'],
     ['This device', 'Este dispositivo', 'Dieses Gerät', 'Cet appareil', 'Este dispositivo', 'Questo dispositivo'],
     ['Board', 'Tabla', 'Liste', 'Tableau', 'Placar', 'Tabella'],
-    ['No entries yet.', 'Todavía no hay entradas.', 'Noch keine Einträge.', 'Aucune entrée pour l’instant.', 'Ainda não há registros.', 'Ancora nessuna voce.'],
     ['No local entries for this board yet.', 'Todavía no hay entradas locales en esta tabla.', 'Noch keine lokalen Einträge für diese Liste.', 'Aucune entrée locale pour ce tableau.', 'Ainda não há registros locais neste placar.', 'Ancora nessuna voce locale per questa tabella.'],
     ['No scores on this device for this board yet.', 'Todavía no hay puntuaciones en este dispositivo para esta tabla.', 'Noch keine Punkte auf diesem Gerät für diese Liste.', 'Aucun score sur cet appareil pour ce tableau.', 'Ainda não há pontuações neste dispositivo para este placar.', 'Ancora nessun punteggio su questo dispositivo per questa tabella.'],
     // ---- status / sync
@@ -176,9 +163,6 @@
     ['Next daily in {time}', 'Próximo diario en {time}', 'Nächste Tagesrunde in {time}', 'Prochain défi du jour dans {time}', 'Próximo desafio em {time}', 'Prossima sfida tra {time}'],
     ['Already played today (score {score}) — replay to improve.', 'Ya jugaste hoy (puntuación {score}). Vuelve a jugar para mejorar.', 'Heute schon gespielt (Punkte {score}) – spiel nochmal, um dich zu verbessern.', 'Déjà joué aujourd’hui (score {score}) — rejouez pour vous améliorer.', 'Você já jogou hoje (pontuação {score}) — jogue de novo para melhorar.', 'Già giocata oggi (punteggio {score}): rigioca per migliorare.'],
     ['Save data reset', 'Datos guardados borrados', 'Spielstand zurückgesetzt', 'Sauvegarde réinitialisée', 'Dados salvos apagados', 'Salvataggi azzerati'],
-    ['WebGL is unavailable — menus work, but the 3D page cannot be shown.', 'WebGL no está disponible: los menús funcionan, pero no se puede mostrar la página 3D.', 'WebGL ist nicht verfügbar – die Menüs funktionieren, aber die 3D-Seite kann nicht angezeigt werden.', 'WebGL est indisponible — les menus fonctionnent, mais la page 3D ne peut pas s’afficher.', 'WebGL indisponível — os menus funcionam, mas a página 3D não pode ser exibida.', 'WebGL non disponibile: i menu funzionano, ma la pagina 3D non può essere mostrata.'],
-    ['WebGL unavailable', 'WebGL no disponible', 'WebGL nicht verfügbar', 'WebGL indisponible', 'WebGL indisponível', 'WebGL non disponibile'],
-    ['Graphics context lost — attempting recovery', 'Se perdió el contexto gráfico: intentando recuperarlo', 'Grafikkontext verloren – Wiederherstellung läuft', 'Contexte graphique perdu — tentative de récupération', 'Contexto gráfico perdido — tentando recuperar', 'Contesto grafico perso: tentativo di ripristino'],
     // ---- modes and play
     ['Journey stage {n}', 'Etapa {n} del viaje', 'Reise-Etappe {n}', 'Étape {n} du voyage', 'Etapa {n} da jornada', 'Tappa {n} del viaggio'],
     ['Daily challenge', 'Desafío diario', 'Tagesherausforderung', 'Défi du jour', 'Desafio diário', 'Sfida giornaliera'],
@@ -208,7 +192,6 @@
     ['finished', 'terminado', 'beendet', 'terminé', 'concluído', 'concluso'],
     ['storm', 'tormenta', 'Sturm', 'tempête', 'tempestade', 'tempesta'],
     ['paused', 'en pausa', 'pausiert', 'en pause', 'pausado', 'in pausa'],
-    ['settings applied', 'configuración aplicada', 'Einstellungen übernommen', 'paramètres appliqués', 'configurações aplicadas', 'impostazioni applicate'],
     ['Phase: {phase}', 'Fase: {phase}', 'Phase: {phase}', 'Phase : {phase}', 'Fase: {phase}', 'Fase: {phase}'],
     ['Strokes: {n} / {max}', 'Trazos: {n} / {max}', 'Striche: {n} / {max}', 'Traits : {n} / {max}', 'Traços: {n} / {max}', 'Tratti: {n} / {max}'],
     ['Ink left: {n}', 'Tinta restante: {n}', 'Tinte übrig: {n}', 'Encre restante : {n}', 'Tinta restante: {n}', 'Inchiostro rimasto: {n}'],
@@ -351,7 +334,16 @@
     ['Studious', 'Estudioso', 'Fleißig', 'Studieux', 'Estudioso', 'Studioso'],
     ['Finish every Learn lesson.', 'Completa todas las lecciones de Aprender.', 'Schließe jede Lernen-Lektion ab.', 'Terminez toutes les leçons d’Apprendre.', 'Conclua todas as lições de Aprender.', 'Completa tutte le lezioni di Impara.'],
     ['Stormwatcher', 'Vigía de tormentas', 'Sturmwächter', 'Guetteur de tempêtes', 'Vigia de tempestades', 'Sentinella della tempesta'],
-    ['Score 1000+ in Tempest Stand.', 'Consigue 1000 puntos o más en Frente a la tempestad.', 'Erziele 1000+ Punkte in der Sturmwache.', 'Marquez 1000 points ou plus dans Face à la tempête.', 'Faça 1000+ pontos em Resistência à tempestade.', 'Fai 1000+ punti in Resistenza alla tempesta.']
+    ['Score 1000+ in Tempest Stand.', 'Consigue 1000 puntos o más en Frente a la tempestad.', 'Erziele 1000+ Punkte in der Sturmwache.', 'Marquez 1000 points ou plus dans Face à la tempête.', 'Faça 1000+ pontos em Resistência à tempestade.', 'Fai 1000+ punti in Resistenza alla tempesta.'],
+    // ---- engine client
+    ['Open Options', 'Abrir Opciones', 'Optionen öffnen', 'Ouvrir les options', 'Abrir Opções', 'Apri Opzioni'],
+    ['Change keys and buttons', 'Cambiar teclas y botones', 'Tasten und Knöpfe ändern', 'Modifier les touches et boutons', 'Alterar teclas e botões', 'Cambia tasti e pulsanti'],
+    ['Music, effects and voice volumes and mute are set in the StarHermit Options (F1).', 'Los volúmenes de música, efectos y voz y el silencio se ajustan en las Opciones de StarHermit (F1).', 'Lautstärke von Musik, Effekten und Stimme sowie Stummschalten stellst du in den StarHermit-Optionen (F1) ein.', 'Les volumes de la musique, des effets et de la voix et la sourdine se règlent dans les options StarHermit (F1).', 'Os volumes de música, efeitos e voz e o mudo são ajustados nas Opções da StarHermit (F1).', 'I volumi di musica, effetti e voce e il silenzioso si impostano nelle Opzioni di StarHermit (F1).'],
+    ['Graphics quality, render scale and the frame rate are set in the StarHermit Options (F1).', 'La calidad gráfica, la escala de renderizado y la tasa de fotogramas se ajustan en las Opciones de StarHermit (F1).', 'Grafikqualität, Renderskalierung und Bildrate stellst du in den StarHermit-Optionen (F1) ein.', 'La qualité graphique, l’échelle de rendu et la fréquence d’images se règlent dans les options StarHermit (F1).', 'A qualidade gráfica, a escala de renderização e a taxa de quadros são ajustadas nas Opções da StarHermit (F1).', 'Qualità grafica, scala di rendering e frequenza dei fotogrammi si impostano nelle Opzioni di StarHermit (F1).'],
+    ['Reduced motion, high contrast and text size are set in the StarHermit Options (F1).', 'El movimiento reducido, el alto contraste y el tamaño del texto se ajustan en las Opciones de StarHermit (F1).', 'Reduzierte Bewegung, hoher Kontrast und Textgröße stellst du in den StarHermit-Optionen (F1) ein.', 'Le mouvement réduit, le contraste élevé et la taille du texte se règlent dans les options StarHermit (F1).', 'Movimento reduzido, alto contraste e tamanho do texto são ajustados nas Opções da StarHermit (F1).', 'Movimento ridotto, alto contrasto e dimensione del testo si impostano nelle Opzioni di StarHermit (F1).'],
+    ['You ({name})', 'Tú ({name})', 'Du ({name})', 'Vous ({name})', 'Você ({name})', 'Tu ({name})'],
+    ['{n} stars', '{n} estrellas', '{n} Sterne', '{n} étoiles', '{n} estrelas', '{n} stelle'],
+    ['Stage {n}', 'Etapa {n}', 'Etappe {n}', 'Étape {n}', 'Etapa {n}', 'Tappa {n}'],
   ];
 
   // Regional variants: only where they differ from en-US, es-419 and fr-FR.
@@ -365,7 +357,6 @@
     'Settings': 'Ajustes',
     'Tap Release again to confirm': 'Pulsa Soltar otra vez para confirmar',
     'Already played today (score {score}) — replay to improve.': 'Ya has jugado hoy (puntuación {score}). Vuelve a jugar para mejorar.',
-    'Graphics context lost — attempting recovery': 'Se ha perdido el contexto gráfico: intentando recuperarlo',
     'Round already ended': 'La ronda ya ha terminado'
   };
   var FR_CA = {
@@ -386,4 +377,4 @@
   T['fr-CA'] = FR_CA;
   delete T['en-US'];
   root.GS_STRINGS = T;
-})(typeof self !== 'undefined' ? self : this);
+})(typeof globalThis !== 'undefined' ? globalThis : typeof self !== 'undefined' ? self : this);

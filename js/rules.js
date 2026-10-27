@@ -18,7 +18,7 @@
   var api = factory(RNG);
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.GSRules = api;
-})(typeof self !== 'undefined' ? self : this, function (RNG) {
+})(typeof globalThis !== 'undefined' ? globalThis : typeof self !== 'undefined' ? self : this, function (RNG) {
   'use strict';
 
   var STATE_VERSION = 1;

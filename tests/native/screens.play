@@ -1,0 +1,95 @@
+# Every dialog from the title (Journey, Practice, Challenges, Settings with its
+# toggles, Help, Scores), then Learn: lesson 1 met by a pen stroke hands over
+# to lesson 2, whose pause sheet's Help opens and closes, and Quit to title.
+until 300 Guardian Sketch
+frames 100
+click Journey
+until 60 =Journey
+frames 20
+expect Stage 1
+save journey
+frames 5
+click =Back
+frames 10
+click Practice
+until 60 New seed
+frames 20
+save practice
+frames 5
+click Cancel
+frames 10
+click Challenges
+until 60 One Line
+frames 20
+save challenges
+frames 5
+click =Back
+frames 10
+click Settings
+until 60 Accessibility
+frames 20
+frames 5
+click Captions
+frames 5
+click Always-on board state panel
+frames 10
+save settings
+frames 5
+click Done
+frames 10
+click =Help
+until 60 How to play
+frames 30
+save help
+frames 5
+click =Close
+frames 10
+click Scores
+until 60 This device
+frames 10
+frames 5
+click This device
+frames 20
+save scores
+frames 5
+click =Close
+frames 10
+click Learn
+until 60 Lesson 1 of 5
+frames 30
+expect Board
+save lesson
+hold ArrowDown
+frames 13
+release ArrowDown
+hold ArrowLeft
+frames 11
+release ArrowLeft
+frames 2
+key Space 1
+frames 2
+hold ArrowRight
+frames 23
+release ArrowRight
+frames 2
+key Space 1
+until 60 Lesson complete!
+until 200 Lesson 2 of 5
+frames 30
+save lesson2
+key KeyP 1
+until 60 Resume
+frames 20
+save pause
+frames 5
+click Help
+until 60 How to play
+frames 20
+frames 5
+click =Close
+until 60 Resume
+frames 10
+frames 5
+click Quit to title
+until 60 Tempest Stand
+frames 20

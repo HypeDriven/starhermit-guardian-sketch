@@ -1,0 +1,70 @@
+# Practice (Gentle): Undo with nothing drawn, a hint, the pen's stroke undone,
+# a release with no ink (Wisp is hit), Retry; then Tempest Stand from the
+# title: released bare, skipped to its results, Copy seed, back to the title.
+until 300 Guardian Sketch
+frames 100
+click Practice
+until 60 New seed
+frames 10
+click Start
+until 60 Expected duration
+frames 10
+click Start
+until 60 560 ink
+frames 10
+key KeyU 1
+until 30 Nothing to undo
+frames 5
+key KeyH 1
+frames 240
+save hint
+hold ArrowDown
+frames 13
+release ArrowDown
+key Space 1
+frames 2
+hold ArrowRight
+frames 5
+release ArrowRight
+frames 2
+key Space 1
+until 30 3 strokes
+frames 10
+key KeyU 1
+until 30 4 strokes
+frames 10
+key KeyR 1
+until 600 Hit at
+frames 20
+expect Retry
+save hit
+frames 5
+click Retry
+until 60 560 ink
+frames 20
+key KeyP 1
+until 60 Quit to title
+frames 10
+frames 5
+click Quit to title
+until 60 Tempest Stand
+frames 20
+click Tempest Stand
+until 60 Expected duration
+frames 10
+click Start
+until 60 800 ink
+frames 10
+key KeyR 1
+frames 30
+key KeyS 1
+until 120 Copy seed
+frames 20
+save storm-results
+frames 5
+click Copy seed
+until 30 Seed copied
+frames 10
+click =Back
+until 120 Journey stars: 0 / 120
+frames 10

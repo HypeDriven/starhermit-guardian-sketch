@@ -1,0 +1,67 @@
+# Journey stages 1 and 2 played to their results with the keyboard pen: a
+# flat line above Wisp (y 140, x 318–668), the storm played out in full on
+# stage 1 and skipped on stage 2, Next level between them, back to the title
+# with the six stars counted.
+until 300 Guardian Sketch
+frames 100
+click Play
+until 60 Expected duration
+frames 10
+click Start
+until 60 520 ink
+frames 10
+hold ArrowDown
+frames 13
+release ArrowDown
+hold ArrowLeft
+frames 11
+release ArrowLeft
+frames 2
+key Space 1
+frames 2
+hold ArrowRight
+frames 23
+release ArrowRight
+frames 2
+key Space 1
+frames 20
+expect 170 ink · 2 strokes
+key KeyR 1
+frames 120
+expect ⏱
+save storm
+until 400 Saved!
+frames 30
+expect Total
+expect 1576
+save results
+frames 5
+click Next level
+until 60 Twin Clouds
+frames 10
+click Start
+until 60 540 ink
+frames 10
+hold ArrowLeft
+frames 23
+release ArrowLeft
+frames 2
+key Space 1
+frames 2
+hold ArrowRight
+frames 23
+release ArrowRight
+frames 2
+key Space 1
+frames 20
+key KeyR 1
+frames 30
+key KeyS 1
+until 120 Saved!
+frames 30
+expect 2038
+frames 5
+click =Back
+until 120 Journey stars: 6 / 120
+frames 10
+save title

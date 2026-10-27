@@ -8,7 +8,7 @@
   var api = factory(RNG);
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.GSContent = api;
-})(typeof self !== 'undefined' ? self : this, function (RNG) {
+})(typeof globalThis !== 'undefined' ? globalThis : typeof self !== 'undefined' ? self : this, function (RNG) {
   'use strict';
 
   var CONTENT_VERSION = 1;

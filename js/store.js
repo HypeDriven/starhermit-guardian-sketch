@@ -1,11 +1,12 @@
 /* Guardian Sketch — persistence: versioned, checksummed local save document.
- * Never stores credentials or tokens. Browser global: window.GSStore.
+ * Never stores credentials or tokens. Classic script: global GSStore natively
+ * (loadClassic, with a localStorage shim over the device storage), require() in Node.
  */
 (function (root, factory) {
   var api = factory();
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.GSStore = api;
-})(typeof self !== 'undefined' ? self : this, function () {
+})(typeof globalThis !== 'undefined' ? globalThis : typeof self !== 'undefined' ? self : this, function () {
   'use strict';
 
   var SAVE_VERSION = 1;
@@ -151,8 +152,58 @@
     };
   }
 
+  // ---------- the engine client (native/platform.ts) ----------
+  // The engine save is { v: 1, progress }: this document without its settings
+  // (the runtime's Options and the game's own settings below hold them now).
+  function docFromSave(data) {
+    if (!data || typeof data !== 'object' || Array.isArray(data)) return null;
+    if (data.v > SAVE_VERSION) return null; // future format: don't clobber
+    var d = migrate(JSON.parse(JSON.stringify(data)));
+    return d ? { v: SAVE_VERSION, progress: d.progress } : null;
+  }
+
+  var bool = function (v) { return typeof v === 'boolean'; };
+  var THEME_IDS = ['graphite', 'ember', 'tide', 'bloom', 'night'];
+  /** The game's own settings (game.<key> in the runtime's settings) with their checks. */
+  var GAME_SETTINGS = {
+    theme: function (v) { return THEME_IDS.indexOf(v) >= 0; },
+    colorPalette: function (v) { return v === 'standard' || v === 'high-visibility'; },
+    captions: bool, leftHanded: bool, haptics: bool, boardMirror: bool, confirmRelease: bool
+  };
+  var GAME_SETTING_KEYS = Object.keys(GAME_SETTINGS);
+  /** What the browser build mirrored to the account's per-player settings (its SYNCED_SETTINGS). */
+  var BROWSER_SETTING_KEYS = ['music', 'effects', 'ambience', 'voice', 'muted', 'captions', 'graphics', 'theme',
+    'reducedMotion', 'highContrast', 'colorPalette', 'largeText', 'leftHanded', 'haptics', 'boardMirror', 'confirmRelease'];
+  /** A valid value for one of the game's settings, else undefined. */
+  function checkSetting(key, v) {
+    var ok = GAME_SETTINGS[key];
+    return ok && ok(v) ? v : undefined;
+  }
+  /** The game's settings among a browser-build settings object. */
+  function gameSettingsFrom(s) {
+    var out = {};
+    if (!s || typeof s !== 'object') return out;
+    GAME_SETTING_KEYS.forEach(function (k) { if (checkSetting(k, s[k]) !== undefined) out[k] = s[k]; });
+    return out;
+  }
+  /** The browser build's cloud save (the SDK's save.json: the plain { v, settings, progress } JSON): its doc and game settings. */
+  function fromBrowserSave(text) {
+    var raw = null;
+    try { raw = typeof text === 'string' ? JSON.parse(text) : null; } catch (e) { raw = null; }
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw) || !raw.progress || typeof raw.progress !== 'object') return { doc: null, settings: null };
+    var d = docFromSave(raw);
+    if (!d) return { doc: null, settings: null };
+    return { doc: d, settings: gameSettingsFrom(raw.settings) };
+  }
+
   return {
     SAVE_VERSION: SAVE_VERSION,
+    docFromSave: docFromSave,
+    fromBrowserSave: fromBrowserSave,
+    GAME_SETTING_KEYS: GAME_SETTING_KEYS,
+    BROWSER_SETTING_KEYS: BROWSER_SETTING_KEYS,
+    checkSetting: checkSetting,
+    defaultProgress: defaultProgress,
     mergeProgress: mergeProgress,
     DEFAULT_SETTINGS: DEFAULT_SETTINGS,
     load: load, save: save, fresh: fresh, migrate: migrate,

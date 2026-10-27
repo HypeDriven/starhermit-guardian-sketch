@@ -1,0 +1,148 @@
+/* Guardian Sketch — the browser build's css/main.css rewritten class-based
+   for the engine's UI (`npm run css` converts it into assets/ui-style.json).
+   Element selectors, ids, body classes and @media do not convert: every
+   widget names its classes and the breakpoints are layouts picked in
+   native/screens.ts. Dashed borders are not drawn by the engine: mastery
+   stages carry a thicker amber border instead. High contrast, larger text
+   and reduced motion are the runtime's (it forces the UI's colours and
+   scales its text). */
+
+:root {
+  --bg: #14161c;
+  --bg2: #1c202a;
+  --fg: #e8eaef;
+  --muted: #aab0bf;
+  --paper: #f4efe3;
+  --paper-edge: #d9cdbb;
+  --paper-fg: #2a2d38;
+  --accent: #ffd34d;
+  --accent-ink: #1a1d27;
+  --danger: #d05545;
+  --star: #f0b429;
+  --ink-track: #3a3f4c;
+  --ink-fill: #7fb0ff;
+  --focus: #8fd0ff;
+}
+
+* { box-sizing: border-box; }
+
+/* ------------------------------------------------------------- shared controls */
+.btn {
+  border: none; padding: 12px 24px; min-height: 44px; min-width: 44px;
+  border-radius: 14px; background: #eef1f6; color: var(--accent-ink); font-size: 16px; text-align: center;
+}
+.btn:hover { background: #ffffff; }
+.btn:disabled { opacity: 0.45; }
+.btn:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.btn-primary { background: var(--accent); color: var(--accent-ink); font-weight: 600; }
+.btn-primary:hover { background: #ffe07a; }
+.btn-big { font-size: 24px; padding: 14px 32px; font-weight: 700; }
+.btn-danger { background: var(--danger); color: #ffffff; }
+.btn-danger:hover { background: #e0665a; }
+.btn-ghost { background: #eef1f626; color: var(--fg); }
+.btn-ghost:hover { background: #eef1f640; }
+.btn-tray { box-shadow: 0 4px 18px #00000073; }
+.btn-sel { background: var(--accent); color: var(--accent-ink); font-weight: 600; }
+
+/* ------------------------------------------------------------- title */
+.title-veil { background: radial-gradient(ellipse farthest-corner at 50% 40%, #14161c40, #14161cc7); }
+.art-frame { border-radius: 14px; box-shadow: 0 14px 40px #0000008c; }
+.logo { color: var(--fg); font-size: 54px; font-weight: 700; letter-spacing: 1px; text-shadow: 0 2px 24px #00000099; }
+.logo-small { color: var(--fg); font-size: 34px; font-weight: 700; text-shadow: 0 2px 24px #00000099; }
+.tagline { color: var(--muted); font-size: 18px; }
+.title-stats { color: var(--fg); font-size: 15px; opacity: 0.85; }
+.countdown { color: var(--muted); font-size: 13.6px; }
+.sync { color: var(--muted); font-size: 12.8px; opacity: 0.9; }
+.compat { color: var(--accent); font-size: 14.4px; }
+
+/* ------------------------------------------------------------- panels (paper) */
+.h2 { color: var(--paper-fg); font-size: 24px; font-weight: 700; }
+.h3 { color: var(--paper-fg); font-size: 16.8px; font-weight: 700; }
+.h4 { color: var(--paper-fg); font-size: 16px; font-weight: 700; }
+.body { color: var(--paper-fg); font-size: 16px; }
+.note { color: #5c5f69; font-size: 13.6px; }
+.intro { color: var(--paper-fg); font-size: 16px; }
+.mode-label { color: #6a6d77; font-size: 14.4px; font-weight: 600; }
+.chip-drop { border: 2px solid #3a6fd8; border-radius: 32px; padding: 4px 11px; background: #ffffff80; color: var(--paper-fg); font-size: 13.6px; }
+.chip-pebble { border: 2px solid #8a8f9a; border-radius: 32px; padding: 4px 11px; background: #ffffff80; color: var(--paper-fg); font-size: 13.6px; }
+.chip-ember { border: 2px solid #e06a3a; border-radius: 32px; padding: 4px 11px; background: #ffffff80; color: var(--paper-fg); font-size: 13.6px; }
+.chip-gale { border: 2px solid #5db8a8; border-radius: 32px; padding: 4px 11px; background: #ffffff80; color: var(--paper-fg); font-size: 13.6px; }
+.bullet { color: var(--paper-fg); font-size: 16px; }
+
+/* journey tiles */
+.level {
+  min-height: 64px; min-width: 52px; padding: 4px;
+  border: 2px solid var(--paper-edge); border-radius: 10px;
+  background: #ffffff; color: var(--paper-fg); font-size: 15.2px; text-align: center;
+}
+.level:hover { border-color: #e8a84b; }
+.level:disabled { opacity: 0.4; }
+.level:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.level-mastery {
+  min-height: 64px; min-width: 52px; padding: 4px;
+  border: 3px solid #c08a3a; border-radius: 10px;
+  background: #fffaf0; color: var(--paper-fg); font-size: 15.2px; text-align: center;
+}
+.level-mastery:hover { border-color: #e8a84b; }
+.level-mastery:disabled { opacity: 0.4; }
+.level-mastery:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.level-num { color: var(--paper-fg); font-size: 15.2px; font-weight: 700; }
+.stars { color: var(--star); font-size: 12.8px; }
+
+/* challenge list */
+.challenge {
+  padding: 10px 14px; min-height: 44px;
+  border: 2px solid var(--paper-edge); border-radius: 10px;
+  background: #ffffff; color: var(--paper-fg); text-align: left; font-size: 16px;
+}
+.challenge:hover { border-color: #e8a84b; }
+.challenge:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.ch-name { color: var(--paper-fg); font-size: 16px; font-weight: 700; }
+.ch-text { color: #4a4d58; font-size: 13.6px; }
+
+/* results */
+.big-stars { color: var(--star); font-size: 48px; letter-spacing: 4px; }
+.score-row { padding: 2px 0; }
+.score-total { border-top: 2px solid var(--paper-edge); border-radius: 0; padding: 5px 0 2px 0; }
+.score-cell { color: var(--paper-fg); font-size: 16px; }
+.score-strong { color: var(--paper-fg); font-size: 16px; font-weight: 700; }
+.board-self { color: var(--paper-fg); font-size: 16px; font-weight: 700; }
+.result-art { border: 1px solid var(--paper-edge); border-radius: 10px; }
+
+/* settings */
+.setsec { border-top: 2px solid var(--paper-edge); border-radius: 0; padding: 6px 0 0 0; }
+.setrow { border-bottom: 1px solid var(--paper-edge); border-radius: 0; min-height: 44px; padding: 4px 0; }
+.danger-text { color: #8a2a1a; font-size: 14.4px; font-weight: 600; }
+
+/* help */
+.help-card { background: #ffffff8c; border: 1px solid var(--paper-edge); border-radius: 10px; padding: 10px 13px; }
+.help-text { color: var(--paper-fg); font-size: 14px; }
+.bind-key { color: var(--paper-fg); font-size: 15px; font-weight: 600; }
+.bind-act { color: #3c3f4a; font-size: 15px; }
+
+/* ------------------------------------------------------------- HUD */
+.hud-pill { background: #14161c9e; border-radius: 8px; padding: 2px 10px; }
+.hud-objective { color: #ffffff; font-size: 16px; font-weight: 600; text-shadow: 0 1px 6px #000000b3; }
+.hud-countdown { color: var(--fg); font-size: 20px; text-shadow: 0 1px 6px #000000b3; }
+.ink-label { color: var(--fg); font-size: 13px; text-shadow: 0 1px 4px #000000cc; }
+.pen-marker { color: var(--accent); font-size: 26px; text-shadow: 0 1px 6px #000000cc; }
+.pen-marker-down { color: #ff7a5c; font-size: 32px; text-shadow: 0 1px 6px #000000cc; }
+
+/* lesson card */
+.learn-card {
+  background: url("../assets/paper-grain.webp") 0 0 / 256px 256px, var(--paper);
+  border: 3px solid var(--paper-edge); border-radius: 14px;
+  padding: 12px 17px; box-shadow: 0 10px 34px #00000080;
+}
+.learn-progress { color: #6a6d77; font-size: 12px; font-weight: 600; letter-spacing: 1px; }
+.learn-text { color: var(--paper-fg); font-size: 14.7px; }
+
+/* ------------------------------------------------------------- toasts, captions, board panel */
+.toast {
+  background: #14161ceb; color: #ffd9d2; border: 1px solid var(--danger);
+  padding: 8px 16px; border-radius: 11px; font-size: 16px; text-align: center;
+}
+.captions { background: #000000c7; color: #ffffff; padding: 5px 14px; border-radius: 8px; font-size: 14.4px; }
+.mirror { background: #14161cd9; border: 1px solid #3a3f4c; border-radius: 10px; padding: 8px 11px; }
+.mirror-h { color: var(--fg); font-size: 13px; font-weight: 700; }
+.mirror-line { color: var(--fg); font-size: 12.5px; }

@@ -1,14 +1,16 @@
 {
   "name": "guardian-sketch",
   "version": "1.0.0",
+  "description": "Guardian Sketch — drawing physics puzzle: shield a paper wisp from the storm with a little ink, on the StarHermit engine.",
   "private": true,
   "scripts": {
-    "start": "node server.js",
-    "test": "node tests/run.js && node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test tests/gfx.test.mjs tests/platform.test.mjs tests/i18n.test.mjs",
-    "test:e2e": "node tests/e2e.mjs"
-  },
-  "dependencies": {
-    "three": "^0.170.0"
+    "test": "npm run test:unit && npm run test:native",
+    "test:unit": "node tests/run.js && node --test tests/save.test.mjs tests/i18n.test.mjs",
+    "test:native": "node tests/native.mjs",
+    "test:browser": "node tools/browser-play.mjs .",
+    "package": "node tools/package-web.mjs",
+    "css": "node tools/css.mjs",
+    "start": "node server.js"
   },
   "devDependencies": {
     "playwright-core": "^1.62.1"
