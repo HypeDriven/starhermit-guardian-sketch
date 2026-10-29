@@ -14,11 +14,10 @@
 // and the old post chain (ambient occlusion, bloom on HDR highlights only,
 // the colour grade with its vignette, FXAA/SMAA/MSAA) as renderer settings.
 //
-// Gaps from three.js: lights take three.js intensities ÷ π; there is no
-// TubeGeometry or CatmullRomCurve3, so the ink tube is built here from the
-// same Catmull-Rom (tension 0.5) the browser build used;
-// the shadow frustum is the engine's (`shadow.distance`), not one fitted by
-// hand; the grade pass is `renderer.grade`.
+// Gaps from three.js: there is no TubeGeometry or CatmullRomCurve3, so the
+// ink tube is built here from the same Catmull-Rom (tension 0.5) the browser
+// build used; the grade pass is `renderer.grade`. Lights, the shadow box
+// fitted to the page and the per-material envMaps are the browser build's.
 //
 // The storm is played by fixed steps (60 a second, `stepTrace`), not by the
 // wall clock, so pausing freezes it on its exact tick and play scripts see
@@ -51,7 +50,6 @@ const PAGE_CX = 0, PAGE_CY = FRAMING.WORLD_H / S / 2;
 const pageW = FRAMING.WORLD_W / S, pageH = FRAMING.WORLD_H / S;
 const wx = (x: number): number => (x - FRAMING.WORLD_W / 2) / S;
 const wy = (y: number): number => y / S;
-const L = (i: number): number => i / PI; // three.js light intensity → the engine's
 
 type Palette = Theme["palette"];
 const camera = new PerspectiveCamera(FRAMING.FOV, 16 / 9, 0.1, 100);
@@ -67,12 +65,13 @@ let time = 0;
 // ---------- lights ----------
 // Warm desk-lamp key (shadow caster), hemisphere fill and a faint cool rim
 // from the opposite side so tubes and the wisp read as round.
-const key = new DirectionalLight(0xfff2dd, L(2.2));
+const key = new DirectionalLight(0xfff2dd, 2.2);
 key.target.position.set(PAGE_CX, PAGE_CY, 0);
 key.position.copy(key.target.position).addScaledVector(new Vector3(4, 5.5, 7).normalize(), 14);
 key.shadow.bias = -0.0006;
-key.shadow.normalBias = 1;
-const hemi = new HemisphereLight(0xfff4e0, 0x2b2f3a, L(0.85));
+key.shadow.normalBias = 0.01;
+fitShadow();
+const hemi = new HemisphereLight(0xfff4e0, 0x2b2f3a, 0.85);
 const rim = new DirectionalLight(0xbcd4ff, 0);
 rim.position.set(PAGE_CX - 6, PAGE_CY + 4, 3);
 rim.target.position.set(PAGE_CX, PAGE_CY, 0);
@@ -438,8 +437,8 @@ function rebuild(): void {
       root.add(sh);
     }
   }
-  rim.intensity = rich ? L(0.55) : 0;
-  hemi.intensity = L(look.reflections ? 0.7 : 0.85); // IBL takes over part of the fill
+  rim.intensity = rich ? 0.55 : 0;
+  hemi.intensity = look.reflections ? 0.7 : 0.85; // IBL takes over part of the fill
   const p = palette ?? Content.THEMES[0]!.palette;
   rim.color.setHex(p.creature).lerp(new Color(0xbcd4ff), 0.6);
   key.color.setHex(p.light);
@@ -710,6 +709,23 @@ export function celebrate(): void {
   if (!reducedMotion) shake = Math.min(0.35, shake + 0.12);
 }
 
+/** The browser build's fitShadow: the key light's ortho box tight around the page slab. */
+function fitShadow(): void {
+  const pos = key.position, f = new Vector3().subVectors(key.target.position, pos).normalize();
+  const rt = new Vector3().crossVectors(f, new Vector3(0, 1, 0)).normalize();
+  const up = new Vector3().crossVectors(rt, f);
+  let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+  const hw = pageW / 2 + 0.7, p = new Vector3();
+  for (let i = 0; i < 8; i++) {
+    p.set(PAGE_CX + (i & 1 ? hw : -hw), i & 2 ? pageH + 0.7 : -0.7, i & 4 ? 0.8 : -0.55).sub(pos);
+    const x = p.dot(rt), y = p.dot(up), z = -p.dot(f);
+    x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); z0 = Math.min(z0, z); z1 = Math.max(z1, z);
+  }
+  const cam = key.shadow.camera;
+  Object.assign(cam, { left: x0, right: x1, bottom: y0, top: y1, near: Math.max(0.1, -z1 - 0.5), far: -z0 + 0.5 });
+  cam.updateProjectionMatrix();
+}
+
 // ---------- camera, picking ----------
 let insetBottom = 0;
 let viewW = 1, viewH = 1;
@@ -733,7 +749,6 @@ function fit(): void {
   camera.updateProjectionMatrix();
   // Decorative fog starts beyond the page (a portrait window pulls the camera far back).
   if (scene.fog instanceof Fog) { scene.fog.near = Math.max(14, camDist + 6); scene.fog.far = Math.max(34, camDist + 26); }
-  key.shadow.distance = camDist + 12;
 }
 export function resize(w: number, h: number): void {
   if (w <= 0 || h <= 0) return;
