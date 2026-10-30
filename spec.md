@@ -1,6 +1,6 @@
 # Guardian Sketch — running game design document
 
-**Status:** shipped on the StarHermit engine 1.29.0 (host API 1.31); this document describes the game as it runs today (present tense). Anything the design wants that the code does not yet do is listed in the final section only.
+**Status:** shipped on the StarHermit engine 1.30.0 (host API 1.32); this document describes the game as it runs today (present tense). Anything the design wants that the code does not yet do is listed in the final section only.
 
 ## 1. Overview
 
@@ -19,7 +19,7 @@ File map (everything that ships or matters):
 
 | Path | Responsibility |
 |---|---|
-| `starhermit.txt` | Manifest: `launch=index.html`, `engine.api=1`, `engine.entry=native/main.ts`, `engine.version=1.29.0`, `engine.minor=31`, capabilities `platform,storage,clipboard`, `server=score-script.js`, the actions (`control.*`, `engine.gamepad.*`, `engine.group.*`) |
+| `starhermit.txt` | Manifest: `launch=index.html`, `engine.api=1`, `engine.entry=native/main.ts`, `engine.version=1.30.0`, `engine.minor=32`, capabilities `platform,storage,clipboard`, `server=score-script.js`, the actions (`control.*`, `engine.gamepad.*`, `engine.group.*`) |
 | `index.html`, `starhermit-files.json` | The engine's web loader and file index, written by `npm run package` (`starhermit package --web .`); never edited by hand |
 | `native/main.ts` | Entry: app state (title → setup → drawing ⇄ paused → storm ⇄ paused → results), the command log and state hashes, undo by replay, pointer / touch / keyboard-pen / gamepad input, storm cues, progression, stars, bests, achievements, local board, posting scores, lessons, toasts, captions, the board state panel; time by fixed steps (60 a second) |
 | `native/screens.ts` | Every screen and dialog in `starhermit:ui`, layouts by window size |
