@@ -789,14 +789,14 @@ export function applyLook(next: Look): void {
     denoise: { lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: next.ao === "high" ? 6 : 4, rings: 2, samples: next.ao === "high" ? 16 : 8, radiusExponent: 2 },
   };
   // High threshold: only embers, sparks and glints bloom; the paper stays crisp.
-  // three r160 page: minor 29 bloom follows r185 UnrealBloomPass, so the page strength is squared (pages on r177+ keep theirs).
-  renderer.bloom = next.bloom ? { strength: 0.55 * 0.55, radius: 0.45, threshold: 0.9, resolution: next.budget.bloomRes } : null;
+  // three r170 page: the engine's r176 UnrealBloomPass model (minor 30) at the page's own strength.
+  renderer.bloom = next.bloom ? { strength: 0.55, radius: 0.45, threshold: 0.9, resolution: next.budget.bloomRes, model: "r176" } : null;
   // The browser build's grade pass: a gentle S-curve (0.18), saturation 1.07,
   // cool shadows / warm highlights, the 0.2 vignette.
   renderer.grade = next.grade ? {
-    space: "display", contrast: 0.09, saturation: 1.07,
+    space: "display", contrastCurve: "s", contrast: 0.18, saturation: 1.07,
     shadows: [0.97, 0.99, 1.04], highlights: [1.03, 1.0, 0.97], split: [0.2, 0.8],
-    vignette: { amount: 0.2, inner: 0.38, outer: 0.9 },
+    vignette: { amount: 0.2, inner: 0.38, outer: 0.9, scale: [1, 0.9] },
   } : null;
   renderer.antialias = next.antialias;
   rebuild();
