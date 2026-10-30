@@ -8,7 +8,7 @@
     "assets/ui-style.json": {"sha256": "274cadbefe79e93371c88f43af15164660e82accd31a6ec0d24973e17057c258", "size": 13690},
     "cover.jpg": {"sha256": "afb63ca14fc907d67121428590c49ea78854c38d41c683ac4d842ed7aa79feb1", "size": 260888},
     "icon.png": {"sha256": "657425501a694e36a5f65556c8264db4ac6740d601b1c47ef2266678aa56d64b", "size": 9774},
-    "index.html": {"sha256": "9359072bbe0e74ca4cdb4309658dd5a9af5265f74aca13fa2808de61587a194b", "size": 1786},
+    "index.html": {"sha256": "de615e1b021431b96afd69a052acac10fe7d51d0ada00f25f8819111fddfe2af", "size": 1786},
     "js/content.js": {"sha256": "d3e98ab7c3e96a48efbb470fe26f84ec678aea9f206925f0ebf792d83bf44596", "size": 24094},
     "js/i18n.js": {"sha256": "e6a7da3c10dc4f27020d7fe5a1d7631afad095e4220478cac1d4f5641c656350", "size": 1779},
     "js/platform-strings.js": {"sha256": "01a6fb4020a688015fb9109e6d138914be3f72240742336a6024ae5124e2d6a5", "size": 7064},
@@ -52,7 +52,7 @@
     "sfx/ui-tap.opus": {"sha256": "be89219a11bcf078c84208b65ebe109f86fcdee28b079150fffe5189d17b5117", "size": 11934},
     "sfx/undo-swipe.opus": {"sha256": "78fc8ffc99a838dd6e980e06f9b94dbf3d40e0cccb2b0c390e3eec6a26daeefc", "size": 12785},
     "sfx/victory-chime.opus": {"sha256": "396402ad87a1bf39dabf10a259c77677074faea79ec776382136ae8af4ff4125", "size": 28210},
-    "starhermit.txt": {"sha256": "e733217b81decf8c94f0fcc1dd2497fe36002a7e7ccd8990b5ba1c413d869068", "size": 2169}
+    "starhermit.txt": {"sha256": "65f97bebc93cfb990fc3ae63af0befdc4ab4549bc1727f77a58a2f52a9389200", "size": 2169}
   },
   "excluded": ["coverart.png", "node_modules/", "package-lock.json", "package.json", "server.js", "spec.md", "tests/", "tools/", "tsconfig.json"],
   "format": 1
