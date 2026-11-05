@@ -234,7 +234,7 @@ function buildMaterials(): void {
     if (m instanceof MeshStandardMaterial) m.roughness = t === "drop" ? (rich ? 0.25 : 0.35) : t === "pebble" ? 0.7 : t === "gale" ? 0.3 : 0.45;
     if (m instanceof MeshPhysicalMaterial) { m.clearcoat = rich ? (t === "drop" ? 0.6 : t === "pebble" ? 0 : 0.4) : 0; m.clearcoatRoughness = 0.15; }
     // Embers run HDR-bright when bloom is on so only they (and sparks) glow.
-    if (ember) m.emissiveIntensity = look && look.bloom ? 1.7 : 0.55;
+    if (ember) m.emissiveIntensity = look && look.bloom !== null ? 1.7 : 0.55;
     hazardMats.set(t, m);
   }
 }
@@ -449,7 +449,7 @@ function rebuild(): void {
   const shadows = look.shadows > 0;
   renderer.shadowMap.enabled = shadows;
   key.castShadow = shadows;
-  if (shadows) key.shadow.mapSize = look.shadows;
+  if (shadows) key.shadow.mapSize = look.shadows; // the level's size: at minor 23+ the engine keeps the game's mapSize
 
   if (cfg) {
     const decor = RNG.derive(cfg.seed || 0, RNG.STREAM_DECOR);
@@ -783,14 +783,15 @@ export function applyLook(next: Look): void {
   look = next;
   loadPaper();
   renderer.camera = camera;
-  renderer.ao = next.ao === "off" ? null : {
-    blendIntensity: next.ao === "high" ? 0.85 : 0.7, radius: 0.35, distanceExponent: 1.4, thickness: 0.6, scale: 1.0,
-    samples: next.ao === "high" ? 16 : 8, resolution: next.budget.aoRes,
-    denoise: { lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: next.ao === "high" ? 6 : 4, rings: 2, samples: next.ao === "high" ? 16 : 8, radiusExponent: 2 },
+  const ao = next.ao, fullAo = !!ao && ao.resolution >= 1; // the engine's "high" AO: full resolution
+  renderer.ao = ao && {
+    blendIntensity: fullAo ? 0.85 : 0.7, radius: 0.35, distanceExponent: 1.4, thickness: 0.6, scale: 1.0,
+    samples: ao.samples, resolution: ao.resolution,
+    denoise: { lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: fullAo ? 6 : 4, rings: 2, samples: ao.denoiseSamples, radiusExponent: 2 },
   };
   // High threshold: only embers, sparks and glints bloom; the paper stays crisp.
   // three r170 page: the engine's r176 UnrealBloomPass model (minor 30) at the page's own strength.
-  renderer.bloom = next.bloom ? { strength: 0.55, radius: 0.45, threshold: 0.9, resolution: next.budget.bloomRes, model: "r176" } : null;
+  renderer.bloom = next.bloom !== null ? { strength: 0.55, radius: 0.45, threshold: 0.9, resolution: next.bloom, model: "r176" } : null;
   // The browser build's grade pass: a gentle S-curve (0.18), saturation 1.07,
   // cool shadows / warm highlights, the 0.2 vignette.
   renderer.grade = next.grade ? {

@@ -1,0 +1,19 @@
+# Graphics-tier bench (tools/engine-tier-bench.mjs): Journey stage 1 with one mouse-drawn line above
+# Wisp (a drag, so it is the same line at any frame rate), measured while the storm plays out:
+# hazards against the ink, sparks, dust in the lamp light, the wisp's halo and the desk.
+until 300 Guardian Sketch
+frames 100
+click Play
+until 60 Expected duration
+frames 10
+click Start
+until 60 520 ink
+frames 10
+drag 36% 66% 64% 66% 20
+frames 20
+expect 2 strokes
+key KeyR 1
+frames 40
+measure start
+frames 220
+measure stop

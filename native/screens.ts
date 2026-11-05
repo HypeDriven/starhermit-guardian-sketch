@@ -62,8 +62,15 @@ function button(b: Btn, width: number | null = null): void {
   }
   if (ui.style(...style, s).id(b.id).button(b.text, opts)) { b.act(); }
 }
-/** Buttons at their own widths in rows that wrap at `width` (CSS flex-wrap). */
+/** Buttons at their own widths in rows that wrap at `width` (CSS flex-wrap). `reverse` mirrors each
+ * line (the left-handed tray), which needs the lines, so it keeps the packer. */
 function flow(label: string, list: Btn[], width: number, gap = 12, reverse = false): void {
+  if (!reverse) {
+    ui.row(label, () => {
+      for (const b of list) button(b, b.width ?? (textWidth(b.text, b.style ?? PLAIN, "button") + 2 > width ? width : null));
+    }, { wrap: true, width, gap, justify: "center", align: "center" });
+    return;
+  }
   const rows: Btn[][] = [[]];
   let used = 0;
   for (const b of list) {

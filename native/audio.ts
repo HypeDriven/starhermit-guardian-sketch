@@ -15,9 +15,10 @@
 // ambience, which the browser build made with oscillators and a noise
 // buffer, are rendered once into clips (createClip); the synthesized
 // stand-ins it played while a sample loaded are not ported (the engine's web
-// runtime drops clip loads while a synthesis graph changes). Clips load once
-// the mixer runs (natively at once, in a browser after the first press), one
-// at a time.
+// runtime drops clip loads while a synthesis graph changes). The clips all
+// load at once in onStart (every loaded clip reaches the mixer, natively and
+// on the web); the room tone and the pad start once the mixer runs (in a
+// browser after the first press).
 import { files } from "starhermit:engine";
 import { context, createClip, loadClip, play as playClip, type AudioClip, type Bus, type Sound } from "starhermit:audio";
 
@@ -29,8 +30,6 @@ const CAPTIONS: Record<string, string> = {
   "block-ember": "ember blocked", "block-gale": "gust deflected", "block-pebble": "pebble blocked",
   achievement: "achievement unlocked", lesson: "lesson complete", pause: "paused",
 };
-// The game's first sounds load first.
-const FIRST = ["ui", "draw-start", "stroke", "invalid", "release", "spawn", "block", "hit", "win", "lose"];
 /** Events whose pitch varies with the round's av stream (js/audio.js variant()). */
 const VARIED = new Set(["stroke", "spawn", "block", "block-ember", "block-gale", "block-pebble"]);
 let avRng: { next(): number } | null = null;
@@ -39,17 +38,7 @@ export function setAvRng(rng: { next(): number } | null): void { avRng = rng; }
 
 const eventFile = new Map<string, string>();
 const clips = new Map<string, AudioClip>();
-const queue: string[] = [];
-let loading = false;
-let wantClips = false;
-function load(name: string): void { if (!queue.includes(name) && !clips.has(name)) queue.push(name); }
-function pump(): void {
-  if (loading || !queue.length) return;
-  const name = queue.shift()!;
-  loading = true;
-  loadClip(`sfx/${name}.opus`).then((c) => { clips.set(name, c); loading = false; }, (e: unknown) => { console.warn(`sfx ${name}: ${String(e)}`); loading = false; });
-}
-/** Reads the manifest and asks for the clips; they load once the mixer runs (see update). */
+/** Reads the manifest and loads every clip at once (onStart); a cue whose clip is still loading is skipped. */
 export function loadSfx(): void {
   try {
     const list = files.readJson("sfx/manifest.json") as unknown as { name?: string; event?: string }[];
@@ -57,7 +46,9 @@ export function loadSfx(): void {
       if (e && typeof e.name === "string" && typeof e.event === "string" && !eventFile.has(e.event)) eventFile.set(e.event, e.name);
     }
   } catch (e) { console.warn(`sfx manifest: ${String(e)}`); }
-  wantClips = true;
+  for (const name of new Set(eventFile.values())) {
+    loadClip(`sfx/${name}.opus`).then((c) => { clips.set(name, c); }, (e: unknown) => console.warn(`sfx ${name}: ${String(e)}`));
+  }
 }
 
 let captionFn: ((text: string) => void) | null = null;
@@ -72,7 +63,7 @@ export function play(event: string): void {
     const bus: Bus = event === "ui" ? "interface" : "effects";
     const pitch = VARIED.has(event) ? 0.94 + (avRng ? avRng.next() : Math.random()) * 0.12 : 1;
     try { playClip(clip, { bus, gain: LEVEL.effects, pitch }); }
-    catch { clips.delete(file!); load(file!); } // a clip the mixer lost: load it again
+    catch { /* the mixer is full this frame: skip it */ }
   }
   const cap = CAPTIONS[event];
   if (cap && captionFn) captionFn(cap);
@@ -138,7 +129,7 @@ function ambienceClip(): AudioClip {
 const CHORDS = [[220.0, 261.63, 329.63], [174.61, 220.0, 261.63], [196.0, 246.94, 293.66], [146.83, 174.61, 220.0]];
 const chords: AudioClip[] = [];
 let hum: AudioClip | null = null;
-/** One rendered voice a frame, once the samples are in; false when all are made. */
+/** One rendered voice a frame; false when all are made. */
 function renderNext(): boolean {
   if (chords.length < CHORDS.length) { chords.push(chordClip(CHORDS[chords.length]!)); return true; }
   if (!hum) { hum = ambienceClip(); return true; }
@@ -151,18 +142,10 @@ let ambStarted = false;
 let nextChord = 0;
 let step = 0;
 
-/** Each frame: the samples once the mixer runs, one rendered voice a frame,
- * then the ambience loop and the pad's chords by mixer time. */
+/** Each frame once the mixer runs: one rendered voice a frame, then the
+ * ambience loop and the pad's chords by mixer time. */
 export function update(): void {
-  if (context.state !== "running") return;
-  if (wantClips) {
-    wantClips = false;
-    const firstFiles = FIRST.map((e) => eventFile.get(e)).filter((f): f is string => !!f);
-    for (const name of firstFiles) load(name);
-    for (const name of eventFile.values()) load(name);
-  }
-  pump();
-  if (loading || queue.length) return;
+  if (context.state !== "running") return; // starting the room tone and the pad still waits for the mixer
   try { if (renderNext()) return; } catch (e) { console.warn(`audio: ${String(e)}`); return; }
   const now = context.currentTime;
   if (!ambStarted && hum) {
