@@ -30,7 +30,7 @@ File map (everything that ships or matters):
 | `native/hint.ts`, `native/hint-worker.js` | The hint search on a script worker |
 | `native/classic.ts`, `native/i18n.ts`, `native/style.ts` | Classic-script loading (with a `localStorage` shim over the device storage) and types; the locale from the runtime's language; the UI theme and styles |
 | `js/rng.js`, `js/rules.js`, `js/content.js`, `js/store.js` | Classic UMD scripts shared with the Node tests and `server.js`: streams, rules, content, save document helpers and local leaderboards |
-| `js/strings.js`, `js/i18n.js`, `js/platform-strings.js` | Translation tables (English keys) and the `T` lookup; the account strings in the nine locales |
+| `assets/strings.json` | Translation tables (English keys) for the engine's `strings` |
 | `tools/ui-style.css` → `assets/ui-style.json` | The style sheet, class-based, converted by `npm run css` |
 | `tools/package-web.mjs`, `tools/css.mjs`, `tools/browser-play.mjs` | Packaging, style conversion, the GPU browser check |
 | `score-script.js` | StarHermit platform script (`server=score-script.js`): range-checks a finished round's total and posts it to the `high-score` leaderboard |
@@ -220,9 +220,9 @@ SFX event table (the source for `sfx/manifest.txt`):
 
 ## 10. Localization
 
-Nine locales ship: **en-US, en-GB, es-419, es-ES, de-DE, fr-FR, fr-CA, pt-BR, it-IT**. Every player-facing string — title, dialogs, HUD and tray, results, help, lessons, scores, board state panel, toasts, captions, and the content names and texts in `js/content.js` — is an English key in `js/strings.js` with es-419, de-DE, fr-FR, pt-BR and it-IT translations; en-GB, es-ES and fr-CA carry only their differences. The StarHermit account lines are `js/platform-strings.js`. "Guardian Sketch", "StarHermit" and "Wisp" are not translated; numbers stay plain digits.
+Nine locales ship: **en-US, en-GB, es-419, es-ES, de-DE, fr-FR, fr-CA, pt-BR, it-IT**. Every player-facing string — title, dialogs, HUD and tray, results, help, lessons, scores, board state panel, toasts, captions, and the content names and texts in `js/content.js` — is an English key in `assets/strings.json` with es-419, de-DE, fr-FR, pt-BR and it-IT translations; en-GB, es-ES and fr-CA carry only their differences. The StarHermit account lines are the engine's `starhermit.*`. "Guardian Sketch", "StarHermit" and "Wisp" are not translated; numbers stay plain digits.
 
-The language is the runtime's interface language (Options › Language: the player's choice, else the account's preferred language, else the device's), mapped to the nearest shipped locale (`es-MX → es-419`, `en-AU → en-GB`, `fr → fr-FR`); the game's own Language setting and `?lang=` are gone. Every string is looked up each frame, so a change shows at once without touching the round.
+The language is the runtime's interface language (Options › Language: the player's choice, else the account's preferred language, else the device's), mapped along the engine's locale chains; the game's own Language setting and `?lang=` are gone. Every string is looked up each frame, so a change shows at once without touching the round.
 
 ## 11. Accessibility
 

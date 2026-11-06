@@ -13,14 +13,14 @@
 // levels (music 60 %, effects 90 %, ambience 50 %) are folded into each
 // sound's gain. The voice bus carried nothing and is gone. The pad and the
 // ambience, which the browser build made with oscillators and a noise
-// buffer, are rendered once into clips (createClip); the synthesized
+// buffer, are rendered once into clips (OfflineAudioContext); the synthesized
 // stand-ins it played while a sample loaded are not ported (the engine's web
 // runtime drops clip loads while a synthesis graph changes). The clips all
 // load at once in onStart (every loaded clip reaches the mixer, natively and
 // on the web); the room tone and the pad start once the mixer runs (in a
 // browser after the first press).
 import { files } from "starhermit:engine";
-import { context, createClip, loadClip, play as playClip, type AudioClip, type Bus, type Sound } from "starhermit:audio";
+import { OfflineAudioContext, context, createClip, loadClip, play as playClip, type AudioClip, type Bus, type Sound } from "starhermit:audio";
 
 const LEVEL = { music: 0.6, effects: 0.9, ambience: 0.5 };
 /** Caption text per logical event (js/audio.js CAPTIONS). */
@@ -40,6 +40,7 @@ const eventFile = new Map<string, string>();
 const clips = new Map<string, AudioClip>();
 /** Reads the manifest and loads every clip at once (onStart); a cue whose clip is still loading is skipped. */
 export function loadSfx(): void {
+  renderVoices();
   try {
     const list = files.readJson("sfx/manifest.json") as unknown as { name?: string; event?: string }[];
     for (const e of Array.isArray(list) ? list : []) {
@@ -69,71 +70,46 @@ export function play(event: string): void {
   if (cap && captionFn) captionFn(cap);
 }
 
-// -- rendered voices ------------------------------------------------------------------------
+// -- rendered voices (one offline context a stem) -----------------------------------------
 const RATE = 11025;
 /** One pad chord an octave down: a triangle root and two sines through a 650 Hz lowpass, up to 0.05 over 1.8 s, gone by 6.4 s. */
-function chordClip(freqs: number[]): AudioClip {
-  const n = Math.round(6.6 * RATE);
-  const out = new Float32Array(n);
+async function renderChord(freqs: number[]): Promise<AudioClip> {
+  const off = new OfflineAudioContext(1, Math.round(6.6 * RATE), RATE);
+  const lp = off.createBiquadFilter();
+  lp.type = "lowpass"; lp.frequency.value = 650; lp.Q.value = -3.01; // linear Q 0.707, in the node's decibels
+  const env = off.createGain();
+  env.gain.setValueAtTime(0, 0);
+  env.gain.linearRampToValueAtTime(0.05, 1.8);
+  env.gain.linearRampToValueAtTime(0, 6.4);
   freqs.forEach((f0, vi) => {
-    const f = f0 * 0.5;
-    for (let i = 0; i < n; i++) {
-      const t = i / RATE;
-      const e = t < 1.8 ? 0.05 * (t / 1.8) : t < 6.4 ? 0.05 * (1 - (t - 1.8) / 4.6) : 0;
-      const ph = (f * t) % 1;
-      const w = vi === 0 ? 1 - 4 * Math.abs(ph - 0.5) : Math.sin(2 * Math.PI * ph);
-      out[i]! += w * e;
-    }
+    const o = off.createOscillator();
+    o.type = vi === 0 ? "triangle" : "sine"; o.frequency.value = f0 * 0.5;
+    o.connect(env); o.start();
   });
-  // RBJ biquad lowpass at 650 Hz, Q 0.707 (the browser build's BiquadFilter)
-  const w0 = (2 * Math.PI * 650) / RATE, alpha = Math.sin(w0) / (2 * 0.707), c = Math.cos(w0), a0 = 1 + alpha;
-  const b0 = (1 - c) / 2 / a0, b1 = (1 - c) / a0, b2 = b0, a1 = (-2 * c) / a0, a2 = (1 - alpha) / a0;
-  let x1 = 0, x2 = 0, y1 = 0, y2 = 0;
-  for (let i = 0; i < n; i++) {
-    const x0 = out[i]!;
-    const y0 = b0 * x0 + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2;
-    x2 = x1; x1 = x0; y2 = y1; y1 = y0;
-    out[i] = y0;
-  }
-  return createClip([out], RATE);
+  env.connect(lp).connect(off.destination);
+  return createClip(await off.startRendering());
 }
-/** The studio room tone: brown-ish noise lowpassed at 300 Hz, at 0.32, as a 4 s loop whose ends cross-fade. */
-function ambienceClip(): AudioClip {
-  const n = 4 * RATE, fade = RATE;
-  const raw = new Float32Array(n + fade);
-  let seed = 4242, last = 0;
-  for (let i = 0; i < raw.length; i++) {
-    seed = (seed * 48271) % 2147483647;
-    const w = (seed / 2147483647) * 2 - 1;
-    last = (last + 0.02 * w) / 1.02;
-    raw[i] = last * 3.5;
-  }
-  // RBJ biquad lowpass at 300 Hz, Q 0.707
-  const w0 = (2 * Math.PI * 300) / RATE, alpha = Math.sin(w0) / (2 * 0.707), c = Math.cos(w0), a0 = 1 + alpha;
-  const b0 = (1 - c) / 2 / a0, b1 = (1 - c) / a0, b2 = b0, a1 = (-2 * c) / a0, a2 = (1 - alpha) / a0;
-  let x1 = 0, x2 = 0, y1 = 0, y2 = 0;
-  for (let i = 0; i < raw.length; i++) {
-    const x0 = raw[i]!;
-    const y0 = b0 * x0 + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2;
-    x2 = x1; x1 = x0; y2 = y1; y1 = y0;
-    raw[i] = y0;
-  }
-  const out = new Float32Array(n);
-  for (let i = 0; i < n; i++) {
-    let v = raw[i]!;
-    if (i < fade) { const k = i / fade; v = v * k + raw[n + i]! * (1 - k); }
-    out[i] = Math.max(-1, Math.min(1, v * 0.32));
-  }
-  return createClip([out], RATE);
+/** The studio room tone: brown noise lowpassed at 300 Hz, a seamless 4 s loop (filtered periodic noise is periodic once settled). */
+async function renderHum(): Promise<AudioClip> {
+  const n = 4 * RATE, settle = RATE;
+  const off = new OfflineAudioContext(1, settle + n, RATE);
+  const noise = off.createNoise({ color: "brown", seed: 4242, seconds: 4 });
+  const lp = off.createBiquadFilter();
+  lp.type = "lowpass"; lp.frequency.value = 300; lp.Q.value = -3.01;
+  const g = off.createGain();
+  g.gain.value = HUM_GAIN;
+  noise.connect(lp).connect(g).connect(off.destination); noise.start();
+  const r = await off.startRendering();
+  return createClip([r.getChannelData(0).slice(settle)], RATE);
 }
+const HUM_GAIN = 0.32;
 const CHORDS = [[220.0, 261.63, 329.63], [174.61, 220.0, 261.63], [196.0, 246.94, 293.66], [146.83, 174.61, 220.0]];
-const chords: AudioClip[] = [];
+const chords: (AudioClip | null)[] = CHORDS.map(() => null);
 let hum: AudioClip | null = null;
-/** One rendered voice a frame; false when all are made. */
-function renderNext(): boolean {
-  if (chords.length < CHORDS.length) { chords.push(chordClip(CHORDS[chords.length]!)); return true; }
-  if (!hum) { hum = ambienceClip(); return true; }
-  return false;
+function renderVoices(): void {
+  const failed = (e: unknown): void => console.warn(`audio: ${String(e)}`);
+  CHORDS.forEach((c, i) => { renderChord(c).then((clip) => { chords[i] = clip; }, failed); });
+  renderHum().then((clip) => { hum = clip; }, failed);
 }
 
 // -- music and ambience ---------------------------------------------------------------------
@@ -142,11 +118,11 @@ let ambStarted = false;
 let nextChord = 0;
 let step = 0;
 
-/** Each frame once the mixer runs: one rendered voice a frame, then the
+/** Each frame once the mixer runs and the voices are rendered: the
  * ambience loop and the pad's chords by mixer time. */
 export function update(): void {
   if (context.state !== "running") return; // starting the room tone and the pad still waits for the mixer
-  try { if (renderNext()) return; } catch (e) { console.warn(`audio: ${String(e)}`); return; }
+  if (!hum || chords.includes(null)) return;
   const now = context.currentTime;
   if (!ambStarted && hum) {
     ambStarted = true;

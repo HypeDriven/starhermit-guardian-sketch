@@ -28,7 +28,7 @@ import {
 } from "./classic.ts";
 import * as audio from "./audio.ts";
 import * as hints from "./hint.ts";
-import { tr, N, pt, onLocaleChange } from "./i18n.ts";
+import { tr, N, onLocaleChange } from "./i18n.ts";
 import * as platform from "./platform.ts";
 import { lookFor } from "./quality.ts";
 import * as render from "./render.ts";
@@ -613,7 +613,7 @@ export function copyInvite(): void {
   const link = platform.inviteLink();
   let ok = false;
   if (link) { try { clipboard.writeText(link); ok = true; } catch { ok = false; } }
-  toast(() => (ok ? pt("inviteCopied") : pt("inviteFailed")));
+  toast(() => (ok ? tr("starhermit.inviteCopied") : tr("starhermit.inviteFailed")));
 }
 export function signIn(): void { void requestSignIn().catch(() => undefined); }
 /** The always-on board state panel's last event line. */
@@ -790,7 +790,7 @@ platform.onSettingsChange(() => {
   render.setTheme(themeFor(sess ? sess.cfg : null).palette);
 });
 onLocaleChange(() => { if (topOverlay() === "scores") refreshScores(); });
-onSessionEnded(() => { app.signedOut = true; toast(() => pt("signedOut")); });
+onSessionEnded(() => { app.signedOut = true; toast(() => tr("starhermit.signedOut")); });
 onPlayerChange((p) => { if (p) app.signedOut = false; });
 // A hidden window pauses the round (the browser build's visibilitychange).
 onSuspend(() => { suspended = true; platform.flush(); pauseGame(); });

@@ -18,7 +18,7 @@ import * as draw from "starhermit:draw";
 import * as ui from "starhermit:ui";
 import { TextureLoader, type Texture } from "starhermit:scene";
 import { Content as C, type Cfg, type HazardType } from "./classic.ts";
-import { tr, pt } from "./i18n.ts";
+import { tr } from "./i18n.ts";
 import * as platform from "./platform.ts";
 import * as render from "./render.ts";
 import {
@@ -30,15 +30,15 @@ import {
 } from "./main.ts";
 import { COLORS } from "./style.ts";
 
+const LB_LINE = { lbPosting: "starhermit.leaderboardPosting", lbRank: "starhermit.leaderboardRank", lbPosted: "starhermit.leaderboardPosted", lbNotPosted: "starhermit.leaderboardNotPosted" } as const;
+
 // ------------------------------------------------------------------ layout
 interface Layout { lw: number; lh: number; sc: number; ox: number; oy: number; phone: boolean; shortLand: boolean; wide: boolean }
 function layoutNow(): Layout {
-  const f = frame();
-  const sc = ui.preferences().scale;
-  const sa = f.safeArea;
-  const lw = Math.max(1, (f.width - sa.left - sa.right) / sc), lh = Math.max(1, (f.height - sa.top - sa.bottom) / sc);
+  const v = ui.viewport!();
+  const sc = v.scale, lw = Math.max(1, v.width), lh = Math.max(1, v.height);
   const shortLand = lw > lh && lh <= 480;
-  return { lw, lh, sc, ox: sa.left / sc, oy: sa.top / sc, phone: !shortLand && lw <= 520, shortLand, wide: lw >= 1024 };
+  return { lw, lh, sc, ox: v.x, oy: v.y, phone: !shortLand && lw <= 520, shortLand, wide: lw >= 1024 };
 }
 const lastHeight = new Map<string, number>();
 type Cls = string | ui.Style;
@@ -170,7 +170,7 @@ function titleScreen(L: Layout): void {
     para(statsText, w, "title-stats", "title-stats", true);
     para(nextDailyText(), w, "countdown", "title-countdown", true);
     para(syncLine(), w, "sync", "title-sync", true);
-    if (app.signedOut && !platform.signedIn()) para(pt("signedOut"), w, "sync", "title-signed-out", true);
+    if (app.signedOut && !platform.signedIn()) para(tr("starhermit.signedOut"), w, "sync", "title-signed-out", true);
   };
   const menu = (w: number): void => {
     const gap = L.phone || L.shortLand ? 8 : 11;
@@ -182,8 +182,8 @@ function titleScreen(L: Layout): void {
       }, { spacing: gap });
     }
     const acct: Btn[] = [];
-    if (!platform.signedIn()) acct.push({ id: "btn-signin", text: pt("signIn"), act: signIn });
-    else if (platform.inviteLink()) acct.push({ id: "btn-invite", text: pt("invite"), act: copyInvite });
+    if (!platform.signedIn()) acct.push({ id: "btn-signin", text: tr("starhermit.signIn"), act: signIn });
+    else if (platform.inviteLink()) acct.push({ id: "btn-invite", text: tr("starhermit.invite"), act: copyInvite });
     if (acct.length) flow("title-account", acct, w);
   };
   const avail = L.lh - 16;
@@ -553,7 +553,7 @@ function resultsDialog(L: Layout): void {
       heading("h3", r.boardLabel ? tr("Leaderboard ({board})", { board: r.boardLabel() }) : tr("Leaderboard"), w);
       r.entries.slice(0, 10).forEach((e, i) => para(`${i + 1}. ${e.name} — ${e.score}${e.won ? " ✓" : ""}`, w, e.self ? "board-self" : "body", `board-${i}`));
     } else if (s.ranked) para(tr("Board: {board}", { board: r.boardLabel ? r.boardLabel() : tr("casual (unvalidated)") }), w, "note");
-    if (app.lb) para(app.lb.state === "lbRank" ? pt("lbRank", { rank: app.lb.rank ?? "" }) : pt(app.lb.state), w, "note", "results-lb");
+    if (app.lb) para(tr(LB_LINE[app.lb.state], { rank: app.lb.rank ?? "" }), w, "note", "results-lb");
   }, null, (w) => {
     const btns: Btn[] = [{ id: "btn-results-retry", text: tr("Retry"), act: restartLevel }];
     if (r.canNext) btns.push({ id: "btn-results-next", text: tr("Next level"), style: ["btn", "btn-primary"], act: nextLevel });

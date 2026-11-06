@@ -24,7 +24,7 @@ const shim = {
 };
 (globalThis as unknown as { localStorage: typeof shim }).localStorage = shim;
 
-for (const f of ["js/rng.js", "js/rules.js", "js/content.js", "js/store.js", "js/strings.js", "js/i18n.js", "js/platform-strings.js"]) loadClassic(f);
+for (const f of ["js/rng.js", "js/rules.js", "js/content.js", "js/store.js"]) loadClassic(f);
 
 // -- The shapes this client reads -------------------------------------------------
 export type Pt = [number, number];
@@ -107,23 +107,11 @@ interface StoreApi {
 }
 export interface Rng { next(): number }
 interface RngApi { derive(seed: number, stream: number): Rng; hashString(s: string): number; STREAM_DECOR: number; STREAM_AV: number }
-interface I18nApi {
-  T(key: string, vars?: Record<string, string | number> | null): string;
-  setLocale(tag: string): string;
-  readonly lang: string;
-  locales: string[];
-}
-interface PlatformStringsApi {
-  platformStrings(lang: string): Record<string, string>;
-  fmtPlatform(s: string, vars?: Record<string, string | number>): string;
-}
 
 const g = globalThis as unknown as {
-  GSRules: RulesApi; GSContent: ContentApi; GSStore: StoreApi; GSRNG: RngApi; GSI18N: I18nApi; PlatformStrings: PlatformStringsApi;
+  GSRules: RulesApi; GSContent: ContentApi; GSStore: StoreApi; GSRNG: RngApi;
 };
 export const Rules = g.GSRules;
 export const Content = g.GSContent;
 export const Store = g.GSStore;
 export const RNG = g.GSRNG;
-export const I18n = g.GSI18N;
-export const PlatformStrings = g.PlatformStrings;
