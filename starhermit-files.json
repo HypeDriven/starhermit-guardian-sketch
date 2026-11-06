@@ -18,7 +18,7 @@
     "native/classic.ts": {"sha256": "7ca7ae20be759a313f7604149bfbb7f60ee13716c722dbe08d7c42ed003cdca3", "size": 6508},
     "native/hint-worker.js": {"sha256": "6aef7e7bf068a74b39fc27c2ab9cb2007beb9a08a698c0cac88df2015da217af", "size": 701},
     "native/hint.ts": {"sha256": "bbc80da3f87665ce31fbdf84e2cc205eb6baf420f86d4dd4a5cc8a9cb43fc309", "size": 2221},
-    "native/i18n.ts": {"sha256": "c76f30e2ba4998d1e44dd692340f18768b9f32a4d5c103ef9d93929058ef3ed6", "size": 1169},
+    "native/i18n.ts": {"sha256": "fe44bf8844ed6c7e152500eadf10f34cfd50513d8b8ce8ed533dce44af642c51", "size": 1177},
     "native/main.ts": {"sha256": "2006fc6e0b2720365c2b448363f8b97842bba67aa38328edeb0d2ea20febfaf2", "size": 38971},
     "native/platform.ts": {"sha256": "af73b96bb9486c47c5ae79e0742756095fb52b14ca1144d72ade7b7ea6e35831", "size": 10571},
     "native/quality.ts": {"sha256": "b15fa9e984b623a37c0b7325e95c26e93b948db40de95f01d5a91d6d25fba5b8", "size": 4696},

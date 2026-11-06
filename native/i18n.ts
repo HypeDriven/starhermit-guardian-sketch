@@ -17,6 +17,6 @@ export function onLocaleChange(fn: () => void): void { strings.onChange(fn); }
 
 export type Vars = Record<string, string | number>;
 /** A game string by its English key in the player's language; `{name}` placeholders from vars. */
-export function tr(key: string, vars?: Vars | null): string { return strings.t(key, vars ?? undefined); }
+export function tr(key: string, vars?: Vars | null): string { return strings.t(String(key), vars ?? undefined); }
 /** Marks an English key translated with tr() where it is shown. */
 export const N = (s: string): string => s;
