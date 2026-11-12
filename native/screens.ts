@@ -1,3 +1,6 @@
+import { localizedStyle as __l10nStyle } from "./l10n/font.ts";
+// localization-runtime:attached
+import { openLocalizedOptions as __l10nOptions } from "./l10n/menu.ts";
 // The browser build's DOM shell (index.html + js/ui.js + css/main.css) as
 // starhermit:ui, built every frame over the page: the title (key art, logo,
 // tagline, journey stars and daily status, the next-daily countdown, the
@@ -12,7 +15,21 @@
 // logo, the tray wrapping), short landscape (≤ 480 px tall: the title in
 // two columns, the tray a column on the right, left when left-handed), and
 // the rest.
-import { frame, openMenu } from "starhermit:engine";
+// The browser build's DOM shell (index.html + js/ui.js + css/main.css) as
+// starhermit:ui, built every frame over the page: the title (key art, logo,
+// tagline, journey stars and daily status, the next-daily countdown, the
+// sync line, Play and the menu grid, sign-in / invite), the HUD (the
+// objective, the ink gauge with "n ink · m strokes", the storm countdown,
+// the action tray with Release / Undo / Hint / Skip / Pause in context, the
+// keyboard pen's marker, the lesson card, the always-on board state panel),
+// the dialogs (setup, journey grid, practice, challenges, pause, settings,
+// results, help, scores, the reset confirmation), the toasts and the
+// caption strip. The browser's media queries are layouts picked by the
+// window's logical size: phone portrait (≤ 520 px wide: a smaller one-line
+// logo, the tray wrapping), short landscape (≤ 480 px tall: the title in
+// two columns, the tray a column on the right, left when left-handed), and
+// the rest.
+import { frame } from "starhermit:engine";
 import { bindingLabel, requestRebind } from "starhermit:input";
 import * as draw from "starhermit:draw";
 import * as ui from "starhermit:ui";
@@ -57,10 +74,10 @@ function button(b: Btn, width: number | null = null): void {
   const s: ui.Style = width != null ? { width } : {};
   if (width != null && textWidth(b.text, style, "button") + 2 > width) {
     const inner = Math.max(20, width - 20);
-    opts.content = () => { ui.style({ text: { align: "center" } }).paragraph(b.text, inner); };
+    opts.content = () => { ui.style(__l10nStyle({ text: { align: "center" } })).paragraph(b.text, inner); };
     s.padding = { start: 8, end: 8, top: 8, bottom: 8 };
   }
-  if (ui.style(...style, s).id(b.id).button(b.text, opts)) { b.act(); }
+  if (ui.style(...__l10nStyle(style), __l10nStyle(s)).id(b.id).button(b.text, opts)) { b.act(); }
 }
 /** Buttons at their own widths in rows that wrap at `width` (CSS flex-wrap). `reverse` mirrors each
  * line (the left-handed tray), which needs the lines, so it keeps the packer. */
@@ -90,7 +107,7 @@ function para(text: string, width: number, cls = "body", id?: string, center = f
   if (!text) return;
   const styles: (string | ui.Style)[] = [cls];
   if (center) styles.push({ text: { align: "center" } });
-  let u = ui.style(...styles);
+  let u = ui.style(...__l10nStyle(styles));
   if (id) u = u.id(id);
   if (ui.measureText(text, { style: styles }).width / ui.preferences().scale <= width) u.label(text);
   else u.paragraph(text, width);
@@ -240,12 +257,12 @@ function hud(L: Layout): void {
       const ow = Math.min(L.lw - 2 * pad - (app.phase === "resolving" ? 90 : 0), 640);
       ui.column("hud-objective-pill", () => para(objectiveText(), ow - 20, "hud-objective", "hud-objective"), { style: "hud-pill" });
       ui.progress(st.cfg.ink.budget ? Math.max(0, Math.min(1, inkLeft() / st.cfg.ink.budget)) : 0, gw);
-      ui.style("ink-label").id("hud-ink").label(tr("{ink} ink · {strokes} strokes", { ink: Math.round(inkLeft()), strokes: st.cfg.ink.maxStrokes - st.strokes.length }));
+      ui.style(__l10nStyle("ink-label")).id("hud-ink").label(tr("{ink} ink · {strokes} strokes", { ink: Math.round(inkLeft()), strokes: st.cfg.ink.maxStrokes - st.strokes.length }));
     }, { spacing: 6 });
     if (app.phase === "resolving" && render.isPlaying()) {
       const left = (st.cfg.simTicks / 60) * (1 - render.traceProgress());
       ui.place("hud-right", { anchor: "top-end", x: pad, y: pad * 0.6 }, () => {
-        ui.column("hud-countdown-pill", () => ui.style("hud-countdown").id("hud-countdown").label("⏱ " + left.toFixed(1) + "s"), { style: "hud-pill" });
+        ui.column("hud-countdown-pill", () => ui.style(__l10nStyle("hud-countdown")).id("hud-countdown").label("⏱ " + left.toFixed(1) + "s"), { style: "hud-pill" });
       });
     }
   }
@@ -256,7 +273,7 @@ function hud(L: Layout): void {
     const lesson = s.lesson;
     ui.place("learn", at, () => {
       ui.column("learn-card", () => {
-        ui.style("learn-progress").id("learn-progress").label(tr("Lesson {n} of {total}", { n: (s.lessonIdx ?? 0) + 1, total: lessonCount() }).toUpperCase());
+        ui.style(__l10nStyle("learn-progress")).id("learn-progress").label(tr("Lesson {n} of {total}", { n: (s.lessonIdx ?? 0) + 1, total: lessonCount() }).toUpperCase());
         heading("h3", tr(lesson.title), lw - 40, "learn-title");
         para(tr(lesson.text), lw - 40, "learn-text", "learn-text");
         flow("learn-buttons", [
@@ -287,7 +304,7 @@ function hud(L: Layout): void {
     const cls = pen.down ? "pen-marker-down" : "pen-marker";
     const m = ui.measureText("✎", { style: cls });
     ui.area({ x: p.x - m.width / 2, y: p.y - m.height / 2, width: m.width + 2, height: m.height + 2 }, () => {
-      ui.style(cls).id("pen-marker").label("✎");
+      ui.style(__l10nStyle(cls)).id("pen-marker").label("✎");
     });
   }
 }
@@ -310,7 +327,7 @@ function mirrorPanel(L: Layout): void {
     ? { anchor: (settings.leftHanded ? "bottom-start" : "bottom-end") as ui.Anchor, x: 10, y: (lastHeight.get("tray") ?? 70) + 12 }
     : { anchor: (settings.leftHanded ? "top-start" : "top-end") as ui.Anchor, x: 10, y: 90 };
   ui.place("mirror", at, () => {
-    ui.style("mirror-h").label(tr("Board"));
+    ui.style(__l10nStyle("mirror-h")).label(tr("Board"));
     for (let i = 0; i < lines.length; i++) para(lines[i]!, w - 24, "mirror-line", `mirror-${i}`);
   }, { style: "mirror", width: w, spacing: 2 });
 }
@@ -367,7 +384,7 @@ function legend(id: string, types: HazardType[], w: number): void {
   }
   ui.column(id, () => {
     rows.forEach((row, ri) => ui.row(`${id}-r${ri}`, () => {
-      for (const it of row) ui.column(`${id}-${it.t}`, () => ui.style({ text: { color: COLORS.paperFg, size: 13.6 } }).label(it.text), { style: "chip-" + it.t });
+      for (const it of row) ui.column(`${id}-${it.t}`, () => ui.style(__l10nStyle({ text: { color: COLORS.paperFg, size: 13.6 } })).label(it.text), { style: "chip-" + it.t });
     }, { spacing: 8 }));
   }, { spacing: 8 });
 }
@@ -416,9 +433,9 @@ function journeyDialog(L: Layout): void {
         tip = tr("{name} — {theme}", { name: tip, theme: theme ? tr(theme.name) : "" });
         if (!prevOk) tip = tr("{label} — locked: earn a star on the previous stage", { label: tip });
         const label = String(i + 1);
-        if (ui.style(cfg.mastery ? "level-mastery" : "level", { width: cw, minHeight: min }).id(`journey-${i}`).button(tr("Stage {n}", { n: i + 1 }), {
+        if (ui.style(__l10nStyle(cfg.mastery ? "level-mastery" : "level"), __l10nStyle({ width: cw, minHeight: min })).id(`journey-${i}`).button(tr("Stage {n}", { n: i + 1 }), {
           disabled: !prevOk, tooltip: tip,
-          content: () => { ui.style("level-num").label(label); ui.style("stars").label(stars(n)); },
+          content: () => { ui.style(__l10nStyle("level-num")).label(label); ui.style(__l10nStyle("stars")).label(stars(n)); },
         })) { closeOverlay("journey"); openSetup(cfg); }
       });
     }, { columns: cols, gap });
@@ -429,10 +446,10 @@ function practiceDialog(L: Layout): void {
     heading("h2", tr("Practice"), w, "practice-title");
     para(tr("Unranked. Undo and hints are on. Restarting with the same seed gives the same layout."), w, "note");
     const opts = C.PRACTICE.map((pr) => tr("{name} — {blurb}", { name: tr(pr.name), blurb: tr(pr.blurb) }));
-    const next = ui.style({ width: w }).id("practice-preset").select(tr("Difficulty"), app.practiceIdx, opts);
+    const next = ui.style(__l10nStyle({ width: w })).id("practice-preset").select(tr("Difficulty"), app.practiceIdx, opts);
     if (next !== app.practiceIdx) app.practiceIdx = next;
     ui.row("practice-seed", () => {
-      ui.style("body").id("practice-seed-label").label(tr("Seed: {seed}", { seed: app.practiceSeed }));
+      ui.style(__l10nStyle("body")).id("practice-seed-label").label(tr("Seed: {seed}", { seed: app.practiceSeed }));
       button({ id: "btn-new-seed", text: tr("New seed"), act: newPracticeSeed });
     }, { spacing: 12, align: "center" });
   }, () => closeOverlay(), (w) => flow("practice-buttons", [
@@ -447,11 +464,11 @@ function challengesDialog(L: Layout): void {
     C.CHALLENGES.forEach((cfg, i) => {
       const best = p.challengeBest[cfg.id];
       const name = tr(cfg.name);
-      if (ui.style("challenge", { width: w }).id(`challenge-${i}`).button(name, {
+      if (ui.style(__l10nStyle("challenge"), __l10nStyle({ width: w })).id(`challenge-${i}`).button(name, {
         content: () => {
-          ui.style("ch-name").label(name);
-          if (cfg.intro) ui.style("ch-text").paragraph(tr(cfg.intro), w - 34);
-          ui.style("ch-text").label(best != null ? tr("Best: {score}", { score: best }) : tr("Not attempted"));
+          ui.style(__l10nStyle("ch-name")).label(name);
+          if (cfg.intro) ui.style(__l10nStyle("ch-text")).paragraph(tr(cfg.intro), w - 34);
+          ui.style(__l10nStyle("ch-text")).label(best != null ? tr("Best: {score}", { score: best }) : tr("Not attempted"));
         },
       })) { closeOverlay("challenges"); openSetup(cfg); }
     });
@@ -488,7 +505,7 @@ function settingsDialog(L: Layout): void {
     heading("h2", tr("Settings"), w, "settings-title");
     section("set-audio", tr("Audio"), w, () => {
       para(tr("Music, effects and voice volumes and mute are set in the StarHermit Options (F1)."), w, "note");
-      button({ id: "btn-options-audio", text: tr("Open Options"), act: () => openMenu() });
+      button({ id: "btn-options-audio", text: tr("Open Options"), act: () => __l10nOptions() });
       check("captions", tr("Captions"));
     });
     section("set-graphics", tr("Graphics"), w, () => {
@@ -537,14 +554,14 @@ function resultsDialog(L: Layout): void {
     heading("h2", r.headline(), w, "results-headline");
     const artH = Math.min(L.lh * (L.shortLand ? 0.14 : 0.22), w * 0.36);
     art("results-art", r.won ? resultArt.saved : resultArt.hit, w, artH, "result-art");
-    ui.column("results-stars-row", () => ui.style("big-stars").id("results-stars").label(stars(r.stars), { tooltip: tr("{n} stars", { n: r.stars }) }), { width: w, align: "center" });
+    ui.column("results-stars-row", () => ui.style(__l10nStyle("big-stars")).id("results-stars").label(stars(r.stars), { tooltip: tr("{n} stars", { n: r.stars }) }), { width: w, align: "center" });
     const rows: [string, number][] = [
       [tr("Survival"), st.score.survival], [tr("Endurance"), st.score.endurance], [tr("Blocks"), st.score.blocks],
       [tr("Clearance"), st.score.clearance], [tr("Ink bonus"), st.score.ink],
     ];
     ui.column("results-table", () => {
-      rows.forEach(([k, v], i) => ui.row(`score-${i}`, () => { ui.style("score-cell").label(k); ui.spacer(); ui.style("score-cell").label(String(v)); }, { style: "score-row", width: w, align: "center" }));
-      ui.row("score-total", () => { ui.style("score-strong").label(tr("Total")); ui.spacer(); ui.style("score-strong").id("results-total").label(String(st.score.total)); }, { style: "score-total", width: w, align: "center" });
+      rows.forEach(([k, v], i) => ui.row(`score-${i}`, () => { ui.style(__l10nStyle("score-cell")).label(k); ui.spacer(); ui.style(__l10nStyle("score-cell")).label(String(v)); }, { style: "score-row", width: w, align: "center" }));
+      ui.row("score-total", () => { ui.style(__l10nStyle("score-strong")).label(tr("Total")); ui.spacer(); ui.style(__l10nStyle("score-strong")).id("results-total").label(String(st.score.total)); }, { style: "score-total", width: w, align: "center" });
     }, { width: w, spacing: 0 });
     if (s.cfg.par) para(tr("Par ★★ {two} · ★★★ {three}", { two: s.cfg.par.score2, three: s.cfg.par.score3 }), w, "note");
     if (r.best != null) para(tr(r.isNewBest ? "New personal best! {best}" : "Personal best: {best}", { best: r.best }), w, "note", "results-best");
@@ -608,7 +625,7 @@ function scoresDialog(L: Layout): void {
     ui.row("scores-tabs", () => {
       for (const t of ["global", "device"] as const) {
         const text = t === "global" ? tr("Global") : tr("This device");
-        if (ui.style("btn", app.scoresTab === t && "btn-sel").id(`tab-${t}`).button(text, { selected: app.scoresTab === t }) && app.scoresTab !== t) {
+        if (ui.style(__l10nStyle("btn"), __l10nStyle(app.scoresTab === t && "btn-sel")).id(`tab-${t}`).button(text, { selected: app.scoresTab === t }) && app.scoresTab !== t) {
           app.scoresTab = t;
           refreshScores();
         }
@@ -633,15 +650,15 @@ function toasts(L: Layout): void {
   let capH = 0;
   if (app.caption) {
     const text = tr(app.caption.text);
-    const r = ui.place("captions", { anchor: "bottom", y: base }, () => ui.style("captions").id("caption-text").label(text));
+    const r = ui.place("captions", { anchor: "bottom", y: base }, () => ui.style(__l10nStyle("captions")).id("caption-text").label(text));
     capH = r.height / L.sc + 8;
   }
   if (!app.toasts.length) return;
   const body = (): void => {
     app.toasts.forEach((t, i) => {
       const text = t.text();
-      if (textWidth(text, "toast") + 34 <= w) ui.style("toast").id(`toast-${i}`).label(text);
-      else ui.style("toast").id(`toast-${i}`).paragraph(text, w - 34);
+      if (textWidth(text, "toast") + 34 <= w) ui.style(__l10nStyle("toast")).id(`toast-${i}`).label(text);
+      else ui.style(__l10nStyle("toast")).id(`toast-${i}`).paragraph(text, w - 34);
     });
   };
   // While a dialog is open the toasts sit at the top edge so they never cover its buttons.

@@ -1,3 +1,4 @@
+import { withLanguageRender as __l10nRender } from "./l10n/menu.ts";
 // Guardian Sketch on the StarHermit engine: the entry module (starhermit.txt
 // engine.entry), played natively by the StarHermit client and in browsers by
 // the engine's web runtime. The rules, content, save document and local
@@ -820,10 +821,14 @@ onUpdate((dt) => {
   // while the pen moves, arrows and the D-pad are the game's, not the focus ring's
   if (canDraw() && PEN_ACTIONS.some((a) => isDown(a)) && ui.focused()) ui.setFocus(null);
 });
-onRender((interp) => {
+onRender(__l10nRender((interp) => {
   const f = frame();
   render.resize(f.width, f.height);
   drawScreens();
   decidePress();
   render.update(frameDt, app.phase === "resolving" && !modalOpen() ? interp : 0);
-});
+}));
+
+// localization-runtime:menu
+import { installLanguageMenu as __installLanguageMenu } from "./l10n/menu.ts";
+__installLanguageMenu(false);
