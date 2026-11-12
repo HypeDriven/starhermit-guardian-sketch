@@ -1,0 +1,98 @@
+{
+  "game": {
+    "id": "b89d619c-aa81-4c37-baa2-b65550b62868",
+    "displayName": "Guardian Sketch",
+    "hosting": {
+      "hostingEnabled": true,
+      "hostedUrl": "https://b89d619c-aa81-4c37-baa2-b65550b62868.starhermit.com/index.html",
+      "deployStatus": "live",
+      "pinnedCommitSha": null,
+      "deployedCommitSha": null,
+      "deployError": null,
+      "deployedAt": "2026-11-12T08:14:48.167687+00:00",
+      "externalLaunchUrl": null,
+      "engineVersion": "1.38.0",
+      "deployWarning": null
+    }
+  },
+  "publishedAt": "2026-11-12T08:14:53.344Z",
+  "sourceCommit": "e0f740d5e6d3feb766314623b0d062932863f25e",
+  "bytesReceived": 1890590,
+  "archiveSha256": "678df9bc9167389df1078e402e133ea83030e65146dfd937de848a92487592d6",
+  "indexSha256": "6136869c06cfa93331f04c58493da9119565d158a348548a18ef7964506cb607",
+  "result": {
+    "clientPublished": true,
+    "serverImageLoaded": false,
+    "imageDigest": null,
+    "bytesReceived": 1890590,
+    "mode": "replace",
+    "filesRemoved": 0,
+    "engineVersion": "1.38.0",
+    "deployWarning": null
+  },
+  "liveVerification": {
+    "at": "2026-11-12T08:14:53.344Z",
+    "files": [
+      {
+        "file": "starhermit-files.json",
+        "sha256": "6136869c06cfa93331f04c58493da9119565d158a348548a18ef7964506cb607",
+        "status": 200
+      },
+      {
+        "file": "assets/localization/Japanese.otf",
+        "sha256": "78da5581d9b9e4b02144103b5e9a8a09daa33458f4624f5444a7c8e18293a4b5",
+        "status": 200
+      },
+      {
+        "file": "assets/localization/Khmer.ttf",
+        "sha256": "b03da94d9314f7c67c7cd56d096f60e13a9ac120a32bd9c29527c02043ae33e3",
+        "status": 200
+      },
+      {
+        "file": "assets/localization/SimplifiedChinese.otf",
+        "sha256": "b8316eeea517b370e112cae55fd8d5d56b0b04d661eec116eadd37cf45dd0d71",
+        "status": 200
+      },
+      {
+        "file": "assets/localization/Tamil.ttf",
+        "sha256": "26cd8b1a7a469cb013b480b97184fe63f0c6d01f5dd18be6d0918961bb0f3848",
+        "status": 200
+      },
+      {
+        "file": "assets/localization/TraditionalChinese.otf",
+        "sha256": "7bd910a95c233506c1c607cc9b4671c5848d8f4e62a17e1222e2c999fda4070b",
+        "status": 200
+      },
+      {
+        "file": "assets/localization/common.json",
+        "sha256": "23d196860bdbb71897232d08e9b2672d5f1e8f17047af9d7956793b2472d2ad5",
+        "status": 200
+      },
+      {
+        "file": "assets/localization/fonts.json",
+        "sha256": "37beaea0dba54c9f2c45995cbf9fd19fad21719d701718c41d7e58dd7748ca13",
+        "status": 200
+      },
+      {
+        "file": "assets/localization/locales.json",
+        "sha256": "265247d9de6bba5c73fcc180e405b56a2d3cd1a351c5bcbaa5c58e360ce7c9d3",
+        "status": 200
+      },
+      {
+        "file": "assets/strings.json",
+        "sha256": "06035f6ad0070123743bb9588100d77804aa01adcc58b928723fc2776ec7fecc",
+        "status": 200
+      },
+      {
+        "file": "index.html",
+        "sha256": "2f8a4d129c3a35547068157b6ddcbf16cb3b58c99f68039cfc71dae712d6b0f8",
+        "status": 200
+      },
+      {
+        "file": "starhermit.txt",
+        "sha256": "c1209d39b1b012e7f853352d109dd9bb474ca235b22c3bec04dc818869ea4058",
+        "status": 200
+      }
+    ]
+  }
+}
