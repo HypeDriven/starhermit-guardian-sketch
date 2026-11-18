@@ -95,10 +95,9 @@ const lessons = C.tutorialLessons();
 export function announce(text: string, kind: "polite" | "assertive" = "polite"): void {
   if (text) ui.announce(text.slice(0, 500), { politeness: kind });
 }
-/** A toast (2.3 s, stacked); `text` re-reads in the current language. */
+/** A native toast (2.3 s); `text` reads in the current language. */
 export function toast(text: () => string): void {
-  app.toasts.push({ text, until: now() + 2.3 });
-  while (app.toasts.length > 3) app.toasts.shift();
+  ui.toast!(text(), { duration: 2.3, position: "bottom", offset: 100, style: "toast", dismissible: false });
   announce(text(), "assertive");
 }
 const INVALID_TEXT: Record<string, string> = {

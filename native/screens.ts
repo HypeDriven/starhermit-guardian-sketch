@@ -1,3 +1,4 @@
+import { bindings } from "starhermit:input";
 import { localizedStyle as __l10nStyle } from "./l10n/font.ts";
 // localization-runtime:attached
 import { openLocalizedOptions as __l10nOptions } from "./l10n/menu.ts";
@@ -146,14 +147,14 @@ function art(id: string, tex: Texture | null, w: number, h: number, cls: string)
 }
 
 // ------------------------------------------------------------------ the frame
-export function drawScreens(): void {
+function drawScreensImmediate(): void {
   loadArt();
   const L = layoutNow();
   const f = frame();
   if (app.phase === "title") titleScreen(L);
   else if (sess) hud(L);
   dialogs(L);
-  toasts(L);
+  captions(L);
   if (app.focusNext) {
     const age = f.frame - app.openedFrame;
     if (age >= 1) ui.setFocus(app.focusNext);
@@ -640,28 +641,20 @@ function scoresDialog(L: Layout): void {
   }, () => closeOverlay(), (w) => flow("scores-buttons", [{ id: "btn-scores-close", text: tr("Close"), style: ["btn", "btn-primary"], act: () => closeOverlay("scores") }], w));
 }
 
-// ------------------------------------------------------------------ toasts and captions
-function toasts(L: Layout): void {
+// ------------------------------------------------------------------ captions
+function captions(L: Layout): void {
   const modal = modalOpen();
   const playing = !!sess && app.phase !== "title" && !modal;
-  const w = Math.min(L.lw * 0.8, 520);
-  // in play the caption strip and the toasts sit above the tray, never over its buttons
   const base = playing && !L.shortLand ? (lastHeight.get("tray") ?? 70) + 14 : 8;
-  let capH = 0;
   if (app.caption) {
     const text = tr(app.caption.text);
-    const r = ui.place("captions", { anchor: "bottom", y: base }, () => ui.style(__l10nStyle("captions")).id("caption-text").label(text));
-    capH = r.height / L.sc + 8;
+    ui.place("captions", { anchor: "bottom", y: base }, () => ui.style(__l10nStyle("captions")).id("caption-text").label(text));
   }
-  if (!app.toasts.length) return;
-  const body = (): void => {
-    app.toasts.forEach((t, i) => {
-      const text = t.text();
-      if (textWidth(text, "toast") + 34 <= w) ui.style(__l10nStyle("toast")).id(`toast-${i}`).label(text);
-      else ui.style(__l10nStyle("toast")).id(`toast-${i}`).paragraph(text, w - 34);
-    });
-  };
-  // While a dialog is open the toasts sit at the top edge so they never cover its buttons.
-  if (modal) ui.place("toasts", { anchor: "top", y: 8 }, body, { spacing: 6, align: "center", width: w });
-  else ui.place("toasts", { anchor: "bottom", y: base + capH + (playing ? 6 : 16) }, body, { spacing: 6, align: "center", width: w });
+}
+
+export function drawScreens(): void {
+  if (!(topOverlay() === "help")) { drawScreensImmediate(); return; }
+  const actions = ["pen_left","pen_right","pen_up","pen_down","pen_fast","pen_toggle","release","undo","hint","skip","pause","camera"];
+  const version = JSON.stringify([(app as any).settings ?? (app as any).options ?? {}, (platform as any).options ?? {}, actions.map((action) => bindings(action))]);
+  ui.retain!("help-screen", version, drawScreensImmediate);
 }
