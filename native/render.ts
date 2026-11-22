@@ -800,6 +800,7 @@ export function applyLook(next: Look): void {
     vignette: { amount: 0.2, inner: 0.38, outer: 0.9, scale: [1, 0.9] },
   } : null;
   renderer.antialias = next.antialias;
+  renderer.motionBlur = next.bloom !== null ? { intensity: 0.25, samples: 8, maxPixels: 16, targetFps: 60, camera: false } : null;
   rebuild();
 }
 export function setTheme(p: Palette): void {
