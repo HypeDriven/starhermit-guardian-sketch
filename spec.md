@@ -1,6 +1,6 @@
 # Guardian Sketch — running game design document
 
-**Status:** shipped on the StarHermit engine 1.47.0 (host API 1.47); this document describes the game as it runs today (present tense). Anything the design wants that the code does not yet do is listed in the final section only.
+**Status:** shipped on the StarHermit engine 1.50.0 (host API 1.50); this document describes the game as it runs today (present tense). Anything the design wants that the code does not yet do is listed in the final section only.
 
 ## 1. Overview
 
@@ -19,7 +19,7 @@ File map (everything that ships or matters):
 
 | Path | Responsibility |
 |---|---|
-| `starhermit.txt` | Manifest: `launch=index.html`, `engine.api=1`, `engine.entry=native/main.ts`, `engine.version=1.47.0`, `engine.minor=47`, capabilities `platform,storage,clipboard`, `server=score-script.js`, the actions (`control.*`, `engine.gamepad.*`, `engine.group.*`) |
+| `starhermit.txt` | Manifest: `launch=index.html`, `engine.api=1`, `engine.entry=native/main.ts`, `engine.version=1.50.0`, `engine.minor=50`, capabilities `platform,storage,clipboard`, `server=score-script.js`, the actions (`control.*`, `engine.gamepad.*`, `engine.group.*`) |
 | `index.html`, `starhermit-files.json` | The engine's web loader and file index, written by `npm run package` (`starhermit package --web .`); never edited by hand |
 | `native/main.ts` | Entry: app state (title → setup → drawing ⇄ paused → storm ⇄ paused → results), the command log and state hashes, undo by replay, pointer / touch / keyboard-pen / gamepad input, storm cues, progression, stars, bests, achievements, local board, posting scores, lessons, toasts, captions, the board state panel; time by fixed steps (60 a second) |
 | `native/screens.ts` | Every screen and dialog in `starhermit:ui`, layouts by window size |
@@ -303,9 +303,9 @@ The string tables include complete regional variants for `fr-BE`, `de-BE`, `en-S
 
 <!-- regional-localization:end -->
 
-## Engine 1.47.0
+## Engine 1.50.0
 
-Browser play uses the WebGPU-only StarHermit 1.47.0 web runtime. Automatic ray-traced shadows are enabled on supported Vulkan devices, with mapped-shadow fallbacks elsewhere. Packaging creates block-compressed runtime textures and compressed glTF copies, retaining original image fallbacks.
+Browser play uses the WebGPU-only StarHermit 1.50.0 web runtime. Automatic ray-traced shadows are enabled on supported Vulkan devices, with mapped-shadow fallbacks elsewhere. Packaging creates block-compressed runtime textures and compressed glTF copies, retaining original image fallbacks.
 
 The help screen replays through retained native UI while its contents, options, layout and key bindings are unchanged.
 
