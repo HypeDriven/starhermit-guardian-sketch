@@ -12,7 +12,7 @@
     "metadataSource": "starhermit.txt",
     "createdAt": "2026-09-01T07:01:03.827316+00:00",
     "coverArtSource": "manifest",
-    "coverArtUpdatedAt": "2026-11-26T16:02:42.126947+00:00",
+    "coverArtUpdatedAt": "2026-11-26T20:44:24.306678+00:00",
     "submittedByUserId": "2712e04e-461b-4d23-81ae-e40b429128a8",
     "submittedByUsername": "starhermit",
     "hosting": {
@@ -22,9 +22,9 @@
       "pinnedCommitSha": null,
       "deployedCommitSha": null,
       "deployError": null,
-      "deployedAt": "2026-11-26T16:02:42.114437+00:00",
+      "deployedAt": "2026-11-26T20:44:24.293452+00:00",
       "externalLaunchUrl": null,
-      "engineVersion": "1.50.0",
+      "engineVersion": "1.51.0",
       "deployWarning": null
     },
     "description": "Draw protective ink barriers to shield a glowing paper creature from an incoming storm.",
@@ -36,19 +36,19 @@
     "links": [],
     "isDisabled": false
   },
-  "publishedAt": "2026-11-26T16:02:41.390Z",
-  "sourceCommit": "08adbd348d6d6c6211d3113486582317de9fbaf0",
-  "bytesReceived": 2882581,
-  "archiveSha256": "fc3674f150ebb476fc9310bfb8d02bd286f53f345798e798d82e46d9c8d06213",
+  "publishedAt": "2026-11-26T20:44:24.518Z",
+  "sourceCommit": "61b3375ce0e5296bc7a4aeaf221491a653e183e3",
+  "bytesReceived": 2882522,
+  "archiveSha256": "6c9d4eaed58b25d613d9c3b78c67952b13809f4839ab310b7d36c5bb4513c888",
   "indexSha256": "7ca3e18593dff256bb6bb8a08458faa148337adc1f1324e347738fde70cba81d",
   "result": {
     "clientPublished": true,
     "serverImageLoaded": false,
     "imageDigest": null,
-    "bytesReceived": 2882581,
+    "bytesReceived": 2882512,
     "mode": "replace",
     "filesRemoved": 0,
-    "engineVersion": "1.50.0",
+    "engineVersion": "1.51.0",
     "deployWarning": null
   },
   "liveVerification": {
