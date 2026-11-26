@@ -47,7 +47,7 @@
     "native/render.ts": {"sha256": "4ac62e1f8c0d6a90e47cd849a8ad66490aa4dacdd0c3475c3051c522fd88809e", "size": 41910},
     "native/screens.ts": {"sha256": "18e0ae409efc1d2e54e7893dd9ec4b7ac4b0adba3a98e439f6d951cc58677cde", "size": 39365},
     "native/style.ts": {"sha256": "1298bd6a14d49283c284cc35687d98364d948434713a7f81108d0f116070fd5c", "size": 2639},
-    "publication.json": {"sha256": "cc43fa20d5067bd24f0f6bfcc0ba72f1bf05f7d452a8ce6cc4911eb6346fac0e", "size": 4129},
+    "publication.json": {"sha256": "b309bb42b0fc1d9d39862c40f44c3f08f5c5a9d12f000a7b87290fc3338cda6e", "size": 4129},
     "score-script.js": {"sha256": "43a7483075588c2e38922030d62c73a946f9fbfd10697dd3aa6d14d8d01221b4", "size": 2486},
     "sfx/badge-unlock.opus": {"sha256": "2c92d4cf731076beff5b68e378c7bdb1c061f113df5cc05600e2aed594674d11", "size": 26077},
     "sfx/creature-hit.opus": {"sha256": "df0b39e86138ce8d78300aff5ca299aa52b9eba893b1cb72462bcd5098c92a5d", "size": 11781},
