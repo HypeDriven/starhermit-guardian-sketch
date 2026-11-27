@@ -1,6 +1,6 @@
 # Guardian Sketch — running game design document
 
-**Status:** shipped on the StarHermit engine 1.51.0 (host API 1.51); this document describes the game as it runs today (present tense). Anything the design wants that the code does not yet do is listed in the final section only.
+**Status:** shipped on the StarHermit engine 1.53.0 (host API 1.53); this document describes the game as it runs today (present tense). Anything the design wants that the code does not yet do is listed in the final section only.
 
 ## 1. Overview
 
@@ -19,7 +19,7 @@ File map (everything that ships or matters):
 
 | Path | Responsibility |
 |---|---|
-| `starhermit.txt` | Manifest: `launch=index.html`, `engine.api=1`, `engine.entry=native/main.ts`, `engine.version=1.51.0`, `engine.minor=51`, capabilities `platform,storage,clipboard`, `server=score-script.js`, the actions (`control.*`, `engine.gamepad.*`, `engine.group.*`) |
+| `starhermit.txt` | Manifest: `launch=index.html`, `engine.api=1`, `engine.entry=native/main.ts`, `engine.version=1.53.0`, `engine.minor=53`, capabilities `platform,storage,clipboard`, `server=score-script.js`, the actions (`control.*`, `engine.gamepad.*`, `engine.group.*`) |
 | `index.html`, `starhermit-files.json` | The engine's web loader and file index, written by `npm run package` (`starhermit package --web .`); never edited by hand |
 | `native/main.ts` | Entry: app state (title → setup → drawing ⇄ paused → storm ⇄ paused → results), the command log and state hashes, undo by replay, pointer / touch / keyboard-pen / gamepad input, storm cues, progression, stars, bests, achievements, local board, posting scores, lessons, toasts, captions, the board state panel; time by fixed steps (60 a second) |
 | `native/screens.ts` | Every screen and dialog in `starhermit:ui`, layouts by window size |
@@ -303,9 +303,9 @@ The string tables include complete regional variants for `fr-BE`, `de-BE`, `en-S
 
 <!-- regional-localization:end -->
 
-## Engine 1.51.0
+## Engine 1.53.0
 
-Browser play uses the StarHermit 1.51.0 web runtime on WebGPU, or WebGL 2 where WebGPU is missing. Automatic ray-traced shadows are enabled on supported Vulkan devices, with mapped-shadow fallbacks elsewhere. Packaging creates block-compressed runtime textures and compressed glTF copies, retaining original image fallbacks.
+Browser play uses the StarHermit 1.53.0 web runtime on WebGPU, or WebGL 2 where WebGPU is missing. Automatic ray-traced shadows are enabled on supported Vulkan devices, with mapped-shadow fallbacks elsewhere. Packaging creates block-compressed runtime textures and compressed glTF copies, retaining original image fallbacks.
 
 The help screen replays through retained native UI while its contents, options, layout and key bindings are unchanged.
 
@@ -314,3 +314,5 @@ Toasts use native engine stacking, styling, accessibility and lifetime managemen
 Browser rendering uses the engine's asynchronous pipeline creation so newly encountered materials do not stall the page. Native play retains the engine's synchronous pipeline behavior.
 
 Higher graphics tiers use native per-object motion blur for moving pieces and effects. Camera motion stays sharp, lower tiers omit the effect, and the runtime's Motion blur and Reduce motion preferences remain authoritative.
+
+On engine 1.53.0, browser play through WebGL 2 compiles a frame's shader programs together and holds that frame until they are linked, blends skinned meshes in one pass, reuses the window pass's depth, and uses a hardware WebGL 2 context when WebGPU's adapter is software.
